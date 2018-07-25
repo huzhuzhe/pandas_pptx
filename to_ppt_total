@@ -1,0 +1,3422 @@
+#-*- coding:utf-8 -*-
+#"2018年1月2日"
+from connect.connect import dwsql,wesql,pd,close,toexcel
+import matplotlib.pyplot as plt 
+from binascii import crc32
+import datetime       
+import numpy as np
+from operator import itemgetter
+from pandas_pptx import public2 as p
+from pandas_pptx.public2 import zip_files
+import os
+import shutil
+from  datetime import datetime as dtime
+from pandas_pptx.method import bar_h,line_h,autolabel,bar_h2,xuanf,xuanf1,xuanf2,bar_h3,to_days,autolabel2,double_line2,autolabel_size,juz,bing
+from pandas_pptx.canlce_method import cxuanf1,cbar_h2,cmycut,cxuanf,cbing,cline_h1,cline_h,cxuanf3,cautolabel_size,cxuanf2,cline_h11,cxuanf22,cbing1,cbar_h22
+from pptx import Presentation
+from pandas_pptx.semail import sendmails
+# 1925107587,1072923071,2385461839,2185438626,1202156858,3449866328,2141376041
+# 1267228044,3609547618,3535692671,3947072981,1515859633,3449866328,3851498346,
+# 2428922444,1388522228,3983756867,1159774094,1247337079,1258503039,2141376041,
+# 1267228044,1202156858,3609547618,3535692671,3947072981,3986535401,2428922444,
+# 2231153627,1388522228,3983756867,1159774094,1247337079,1258503039,3986535401
+# 2679806009,3328158933,1167377765,2536496747,423746177,3432908976,3333646618
+# 1423746177,3400524502,3568103774,3010491476,1511967369,3847083368,3131922175,
+# 1660416278,2451819219,2573618848, 
+
+# 半年=3010491476,1511967369,2231153627,3851498346,3333646618,2175581057,1388522228,3010491476    
+# bid_list=[1511967369,2231153627,3851498346,3333646618,2175581057,1388522228,1609373251]这是没有导出来的，先留着
+# 3599689981,3360060552,3026788370,1685111634,1685412365,1338431793,2751693028,
+# 1347905631,1355237514,1148244516,2995715610,3338739025,1796789835,1053338193,1563976985
+
+
+# 半年的
+# 3777173150,1339504240,1416191014,1206755638,2026139243,1959120156,2175581057,1388522228,3360060552,
+# 3026788370,1685111634,1685412365,2276688337,2231153627,3851498346,3913378217,1218397437,2718212463
+# 3817633888,1571061632,1275080893,1284915470,1617428769，2007496835,1238963636,1183030395,3998948976,
+# 1381206082,2080156737,1270786938,1378710551,1609373251,1337423937,1160652689,1511967369,3333646618
+
+
+
+bid_list=[4189864415]
+
+for bid in bid_list:
+    ids=crc32("%i".encode() %bid)
+    dbs=int(ids%10)
+    tbs=int(ids/10%10)
+    
+
+     
+    # 获取默认等级
+    grid_default='''SELECT ccIsCommon,ccid,ccname
+    from welife_card_categories
+    where bid=%i and ccIsCommon=1''' %bid
+    grid_default_d=wesql(grid_default)
+    if grid_default_d.empty:
+        grid_default_d=pd.DataFrame({'ccname':'默认等级'},index=[0])
+    
+    myname=grid_default_d.ix[0,'ccname']
+
+    
+    print('=========================')
+    print('new_create%s'%bid)
+    print('=========================')
+    
+    plt.rcParams['font.sans-serif']=['SimHei'] #用来正常显示中文标签
+    plt.rcParams['axes.unicode_minus']=False #用来正常显示负号
+    
+    # 通过时间的变换，求出最近一个月的数据
+    mytime=pd.to_datetime(p.ftime_e,format='%Y%m%d')
+    # 将给出的截至时间减去28天，得到最近一个月的时间
+    mytime=mytime+datetime.timedelta(days=-28)
+    #  比如，从20171201得到201712，并变成文本
+    mytime=mytime.strftime('%Y%m')
+    
+    
+    # 根据会员等级循环画图
+    ccname='''select ccid as grid,ccname from welife_card_categories where bid=%i 
+    -- and ccid in (1005884,1005878,1005877)
+    ''' %bid
+    ccname_d=wesql(ccname)
+    cate=ccname_d.ix[:,'ccname']
+    
+    # 获取分店名称
+    sname='''select sid,sname  from welife_shops where bid=%i''' %bid
+    sname_d=wesql(sname)
+    
+    # 获取商户名称
+    bname='''select bid ,bbrandname from welife_bizs where bid=%i'''  %bid
+    named=wesql(bname)
+    bsname=named.ix[0,'bbrandname']
+    
+    
+    
+    # 更改工作目录,如果存在该目录的话则将其指定为工作目录，如果不存在的话，则新建一个目录然后制定为工作目录,则导出的ppt将存放在新的文件夹内
+    a="%s数据分析_%s" %(bsname,p.ftime_e)
+    ori_path=r'C:\Users\huzhuzhe\eclipse-workspace\python-ppt\pandas_pptx'
+    if not os.path.exists(a):
+        os.chdir(ori_path)
+        b=os.mkdir(a)
+        mypath=os.path.join(ori_path,a)
+        shutil.copy('template.pptx',mypath)
+        os.chdir(mypath)
+    else:
+        mypath=os.path.join(ori_path,a)
+        os.chdir(mypath)
+    
+    
+    
+    
+ 
+    # 1.各等级每月新增（有几个会员等级就画几张图出来）
+    #需要注意有些商户的粉丝会员就叫普通会员，所以这里的普通会员需要改成普通会员
+    huiyuan_new_create_grid='''select grid,month,sum(num) as new_create from(select
+    IFNULL(s.ccName,'%s') as 'grid',  
+    date_format(t.uRegistered, '%%Y%%m') as 'month',
+    count(1) num
+    from welife%s.welife_users%s t
+    left join welife_card_categories s on t.ccid = s.ccid
+    where t.bid =%i
+    and t.uRegistered >= %s
+    and t.uRegistered < %s
+    and t.uCardStatus=2
+    -- and t.ccid in (3004612,3003310,3009135,3004613,3004614,3003311,3009136,3009138)
+    group by s.ccName,date_format(t.uRegistered,'%%Y%%m'))a group by grid,month'''  %(myname,dbs,tbs,bid,p.ftime_s,p.ftime_e)
+    
+    print('1计算整体会员的新增')
+    huiyuan_new_create_grid_d=wesql(huiyuan_new_create_grid)
+    
+    # 获得整体会员每月的发展情况
+    huiyuan_new_create_grid_d_grouped=huiyuan_new_create_grid_d.groupby('month').sum()
+    
+    # 取消索引，便于直接对列做出引用
+    huiyuan_new_create_grid_d_grouped=huiyuan_new_create_grid_d_grouped.reset_index()
+    # 此处之所以是1991,因为和后面的重复了
+    fig=plt.figure('1991%s'%bid,figsize=(10,6))
+    plt.plot(huiyuan_new_create_grid_d_grouped['month'],huiyuan_new_create_grid_d_grouped['new_create'],'-o',label='整体会员的新增')
+    autolabel(huiyuan_new_create_grid_d_grouped['month'], huiyuan_new_create_grid_d_grouped['new_create'],12)
+    plt.legend()
+    plt.xlabel('月份')
+    plt.xticks(fontsize=13,rotation=15)
+    plt.ylabel('新增人数')
+    plt.title('每月整体会员新增情况')
+    
+    plt.savefig('1整体会员的新增',dpi=200)
+    
+    print('2计算各等级会员的新增')
+    # 还想要取得各等级目前的存量，这样就知道对最高的前两名添加标签，并且还能计算最高两名分店的散点图
+    # 之所以要限制month等于mytime是由八大碗出来的问题，就是整体新增存量前2名，并不是最近一个月新增的前2名，
+    # 所以在后面报错，于是限制了最近一个月新增的前2名
+    
+    
+    huiyuan_new_create_grid_d_grouped_grid=huiyuan_new_create_grid_d.groupby('grid').sum()
+    huiyuan_new_create_grid_d_grouped_grid=huiyuan_new_create_grid_d_grouped_grid.reset_index()
+    huiyuan_new_create_grid_d_grouped_grid=huiyuan_new_create_grid_d_grouped_grid.sort_values(by='new_create',ascending=False)
+    
+    
+    # print(huiyuan_new_create_grid_d_grouped_grid)
+    # 排序之后索引会发生变化，而且在排序的时候用inplace产生的新dataframe是空的，所以采取的是reindex
+    new_index=np.arange(len(huiyuan_new_create_grid_d_grouped_grid))
+    huiyuan_new_create_grid_d_grouped_grid_new=huiyuan_new_create_grid_d_grouped_grid
+    huiyuan_new_create_grid_d_grouped_grid_new['myrank']=new_index
+    huiyuan_new_create_grid_d_grouped_grid_new=huiyuan_new_create_grid_d_grouped_grid_new.set_index('myrank')
+    
+    
+    huiyuan_new_create_grid_d_pivot_table=pd.pivot_table(huiyuan_new_create_grid_d,index='month',
+                                                         columns='grid',values='new_create',aggfunc=np.sum,fill_value=0).reset_index()
+    
+    name_list=list(set(huiyuan_new_create_grid_d['grid']))
+    # 修改
+    # name_list=['积分卡','铂金级','黄金卡','钻石级','荣耀级']
+    
+    
+    
+    double_line2('1992%s'%bid, huiyuan_new_create_grid_d_pivot_table['month'], huiyuan_new_create_grid_d_pivot_table, 
+                 '月份', '各等级新增', name_list, '每月各等级新增')
+    
+    # 2.各门店各等级的会员新增
+    new_sid_grid='''select  date_format(uregistered,'%%Y%%m') as 'rgtime',r.sid,sname,u.ccid,
+    ifnull(ccname,'%s') as ccname ,count(uid) as '新增人数'
+    from  welife%s.welife_users%s u 
+    left join welife_qrcodes r on u.bid=r.bid and u.qrid =r.qrid 
+    left join welife_shops s on u.bid =s.bid and r.sid=s.sid 
+    left join welife_card_categories c on u.bid=c.bid and u.ccid=c.ccid
+    where  uRegistered>=%s and uRegistered<%s and u.bid= %i
+    and uCardStatus=2
+    and s.sid>0
+    group by date_format(uregistered,'%%Y%%m'),r.sid ,s.sname,u.ccid,c.ccname''' %(myname,dbs,tbs,p.ftime_s,p.ftime_e,bid)
+    
+    # 3.各门店各等级会员新增_首次消费(注意sid为空值或者0都是需要用消费来匹配的，所以这就是第43行的含义)
+    # 首次消费时候sid可能是99999999,需要用sid<>99999999排除
+    new_sid_grid_null='''select date_format(rgtime,'%%Y%%m') as 'rgtime',sid,ccid,
+    ifnull(ccname,'%s') as ccname_new,count(uid) as 'new_created' from 
+    (select  rgtime,b.sid ,a.uid,ccid,ccname  from (
+    select  date_format(uregistered,'%%Y%%m%%d') as 'rgtime',u.uid,r.sid,u.ccid,u.bid,ccname
+    from  welife%s.welife_users%s u 
+    left join welife_qrcodes r on u.bid=r.bid and u.qrid =r.qrid  
+    left join welife_card_categories c on u.bid=c.bid and u.ccid=c.ccid
+    where  uRegistered>=%s and uRegistered<%s and u.bid=%i and uCardStatus=2
+    and (r.sid is null  or length(r.sid)<2)) a 
+    left join (select uid,sid,bid,min(date_format(tcCreated,'%%Y%%m%%d'))  as '首次消费时间' 
+    from welife_trade_consumes where bid=%i and sid <>999999999 and tcstatus=2 and tctype=2 
+    group by uid) b
+    on a.bid=b.bid and a.uid=b.uid) t1
+    group by date_format(rgtime,'%%Y%%m%%'),sid,ccid''' %(myname,dbs,tbs,p.ftime_s,p.ftime_e,bid,bid)
+    print('3计算各门店的会员新增')
+    new_sid_grid_d=wesql(new_sid_grid)
+    
+    if new_sid_grid_d.empty:
+        new_sid_grid_null_d=wesql(new_sid_grid_null)
+        new_sid_grid_null_d['sid']=new_sid_grid_null_d['sid'].apply(lambda x:str(x))
+        sname_d['sid']=sname_d['sid'].apply(lambda x:str(x))
+        new_create_d=pd.merge(new_sid_grid_null_d,sname_d,on=['sid'],how='left')
+        new_create_d['sname']= new_create_d['sname'].where( new_create_d['sname'].notnull(),'总部推广')
+        new_create_d.rename(columns={'ccname_new':'ccname','new_created':'新增总人数'},inplace=True)
+    else:
+        new_sid_grid_d['sid']=new_sid_grid_d['sid'].apply(lambda x:str(x))
+        print('    3.2添加门店为空的首次消费')
+        new_sid_grid_null_d=wesql(new_sid_grid_null)  
+        if new_sid_grid_null_d.empty:
+            new_sid_grid_null_d=pd.DataFrame({'sid':1,'ccid':1,'rgtime':'20110101','new_created':0,'ccname_new':1},index=[0])
+        
+        # 将有sid和没有sid的关联起来
+        new_create_d=pd.merge(new_sid_grid_d,new_sid_grid_null_d,on=['sid','ccid','rgtime'],how='outer')
+        new_create_d['sid'].fillna(0,inplace=True)
+        new_create_d.rename(columns={'sname':'sname_original'},inplace=True)
+        sname_d['sid']=sname_d['sid'].apply(lambda x:str(x))
+        new_create_d=pd.merge(new_create_d,sname_d,on='sid',how='left')
+        # 将有sid和没有sid的新增人数里面的空值（因为是外连接，所以有空值）替换为0，这样就可以顺利的相加
+        new_create_d['new_created']=new_create_d['new_created'].where(new_create_d['new_created'].notnull(),0)
+        new_create_d['新增人数']=new_create_d['新增人数'].where(new_create_d['新增人数'].notnull(),0)
+        # 将有sid的注册时间里面的空值替换成没有sid里面的时间，这样使得时间这一列全部是相同的时间了（下面的ccname和sname都是相同的思路）
+        # new_create_d['retime']=new_create_d['rgtime'].where(new_create_d['rgtime'].notnull(),new_create_d['rgtime'])
+        new_create_d['ccname']=new_create_d['ccname'].where(new_create_d['ccname'].notnull(),new_create_d['ccname_new'])
+        new_create_d['sname']=new_create_d['sname'].where(new_create_d['sname'].notnull(),'总部推广')
+        new_create_d['新增总人数']=new_create_d['新增人数']+new_create_d['new_created']
+        
+        
+        
+        
+    new_create_d1=pd.pivot_table(new_create_d,index=['rgtime','sname'],values=['新增总人数'],aggfunc=sum)
+    new_create_d1=new_create_d1.reset_index()
+    
+    # 有些奇怪的需求是，分店的新增拿出了最近一个季度的新增，但是要看前两个季度的新增数据，不添加在ppt里面，只导出excel供他们参考
+    w=pd.ExcelWriter('%s门店会员新增.xlsx'%bsname)
+    new_create_d1.to_excel(w,'每月门店新增')
+    # new_create_d只有各门店的新增数量，把等级数据拿掉了，现在想拿出等级的信息，但是重新修改new_create_d的透视表的话，担心对后面的数据有影响
+    # 所以还是新建一个
+    new_create_d2=pd.pivot_table(new_create_d,index=['rgtime','sname','ccname'],values=['新增总人数'],aggfunc=sum)
+    new_create_d2=new_create_d2.reset_index()
+    new_create_d2.to_excel(w,'每月各门店各等级会员新增')
+    w.save()
+    
+    # print(new_create_d2.head())
+    # 到此已经顺利的求出各门店的每月的会员等级的新增，但是按照目前的思路是取出最近的一个月的每个门店的新增数据，其实对大量的数据有点浪费
+    
+    # 这一行取出了最近一个月的门店新增，总是饱受诟病，现在修改为最近三月的均值
+    # new_create_d_last=new_create_d1[new_create_d1['rgtime']=='%s' %mytime]
+    # new_create_d_last=new_create_d1[new_create_d1['rgtime']>='201801']
+    ftime_e_time=pd.to_datetime(p.ftime_e,format='%Y%m%d')
+    three_month=ftime_e_time+datetime.timedelta(days=-85)
+    three_month=three_month.strftime('%Y%m')
+    new_create_d_last_three_month=new_create_d1[new_create_d1['rgtime'] >='%s' %three_month]
+    new_create_d_last_three_month_pivot=pd.pivot_table(new_create_d_last_three_month,index='sname',values='新增总人数',aggfunc=np.mean)
+    new_create_d_last=new_create_d_last_three_month_pivot.reset_index()
+    new_create_d_last['新增总人数']=new_create_d_last['新增总人数'].apply(lambda x:int(x))
+    # print(new_create_d_last)
+    
+    
+    
+    
+    
+    # 取出来最近的一个月总的存量在前2名的等级
+    new_create_d_last2=new_create_d2[new_create_d2['rgtime']=='%s' %mytime]
+    
+    # huiyuan_new_create_grid_d_last_month得到的是最近一个月各等级的新增（一定要注意的是总量拍前两名的不代表最近一个月的新增也在前2，之前取的是
+    # 总量的前2，而画散点图用到的是最近一月的前2，所以用重新提取最近一个月的新增前2名）
+    huiyuan_new_create_grid_d_last_month=huiyuan_new_create_grid_d[huiyuan_new_create_grid_d['month']==mytime]
+    
+    
+    huiyuan_new_create_grid_d_last_month=huiyuan_new_create_grid_d_last_month.sort_values(by='new_create',ascending=False)
+    # 因为排序之后索引会发生变化，所以重新建立一个索引
+    huiyuan_new_create_grid_d_last_month['new_index']=np.arange(len(huiyuan_new_create_grid_d_last_month))
+    huiyuan_new_create_grid_d_last_month=huiyuan_new_create_grid_d_last_month.set_index('new_index')
+    
+    # print('huiyuan_new_create_grid_d_last_month',huiyuan_new_create_grid_d_last_month)
+    
+    # 居然只有一个等级，而后面的计算你需要两个等级才能画图，所以还要先判断数据框的行数
+    if len(huiyuan_new_create_grid_d_last_month)<2:
+        huiyuan_new_create_grid_d_last_month.loc[1]=0
+        huiyuan_new_create_grid_d_grouped_grid_ix_last_month=huiyuan_new_create_grid_d_last_month.ix[0:1,['grid']]
+    else:
+        huiyuan_new_create_grid_d_grouped_grid_ix_last_month=huiyuan_new_create_grid_d_last_month.ix[0:1,['grid']]
+    # new_create_d_last2是各门店的各等级的一个汇总表，现在应该是把新增存量在前2的拿出来组成一个新的表，然后画出散点图
+    if new_create_d_last2.empty:
+        fig=plt.figure(99)
+        plt.bar(0,0)
+        plt.title('需要删除')
+        
+        plt.savefig('99%s%s门店新增对比'%(bid,mytime))
+    else:
+        col1=new_create_d_last2[new_create_d_last2['ccname']==huiyuan_new_create_grid_d_grouped_grid_ix_last_month['grid'][0]]
+        col2=new_create_d_last2[new_create_d_last2['ccname']==huiyuan_new_create_grid_d_grouped_grid_ix_last_month['grid'][1]]
+        
+        # 如果只有一个等级的话，就看这个等级各门店的新增情况，也就是直接将两个等级的数据相等
+        if col2.empty:
+            col2=col1
+        col_re=pd.merge(col1,col2,on=['rgtime','sname'])
+    #     修改
+        col_re=col_re[col_re['sname']!='总部推广']
+        if col_re.empty or len(set(col_re['ccname_x']))<2:
+            fig=plt.figure(99)
+            plt.bar(0,0)
+            plt.title('需要删除')
+            
+            plt.savefig('99%s%s门店新增对比'%(bid,mytime))
+        else:
+        # 属于临时插入的图片,所以编号只能往最大的取
+            juz('99%s'%bid,col_re['新增总人数_x'],col_re['新增总人数_y'],col_re['sname'],
+                col_re['ccname_x'][0],col_re['ccname_y'][0],'%s门店新增对比'%mytime)
+        
+    
+    
+    
+    # 画出分店的最近一个月的所有的会员新增并排序
+    # 分店的数量一般较多，所以可以将fig适当的放大
+    fig=plt.figure(3,figsize=(10,6))
+    x=np.arange(new_create_d_last['sname'].count())
+    xticks1=new_create_d_last.sort_values(by='新增总人数')['sname']
+    
+    # 先zip,然后unzip,确保后面的排序正常
+    c=list(zip(x,new_create_d_last['新增总人数']))
+    c.sort(key=itemgetter(1))
+    labels,value=zip(*c)
+    
+    # 排序的诀窍在这儿，因为arange是排序的，所以画出来的图形也是排序的
+    indexs=np.arange(len(x))
+    plt.bar(indexs,value,align='center',width=0.75)
+    plt.xticks(indexs,xticks1,size='small',rotation=45)
+    for a,b in zip(indexs,value):
+        plt.text(a,b+1.5,'%.0f' %b,ha='center',va='bottom',fontsize=13)
+    plt.title('%s-%s分店平均每月会员新增'%(three_month,mytime))
+    
+    plt.savefig('3分店会员新增',dpi=200)
+    
+    
+    
+    # 3.有消费的会员存量
+    cunling_consumed_grid='''select grid,sum(trade_num) as have_trade_num
+    from(
+    select IFNULL(s.ccName, '%s') 'grid', count(1) 'trade_num'
+    from welife%s.welife_users%s t
+    left join welife_card_categories s on t.ccid = s.ccid
+    where t.bid=%i
+    and t.uRegistered >= %s
+    and t.uRegistered < %s
+    and t.uCardStatus=2
+    
+    -- 修改
+     -- and t.ccid in (3004945,3007787,3009255,3007788,3007789)
+    
+    
+    and uConsumeNum>0
+    group by s.ccName) t
+    group by grid ''' %(myname,dbs,tbs,bid,p.ftime_s,p.ftime_e)
+    
+    
+    
+    print('4计算各等级有消费的会员存量')
+    cunling_consumed_grid_d=wesql(cunling_consumed_grid)
+    # 各等级现有的存量,将前面的新增按月求和
+    huiyuan_new_create_grid_d_grouped_grid=huiyuan_new_create_grid_d.groupby('grid').sum()
+    huiyuan_new_create_grid_d_grouped_grid=huiyuan_new_create_grid_d_grouped_grid.reset_index()
+    # 删除多余的月份一列
+    del huiyuan_new_create_grid_d_grouped_grid['month']
+    # 合并并计算出有消费占全部存量的比
+    trade_num_2_total=pd.merge(huiyuan_new_create_grid_d_grouped_grid,cunling_consumed_grid_d,on=['grid'])
+    trade_num_2_total['消费占存量比']=trade_num_2_total['have_trade_num']/trade_num_2_total['new_create']
+    # trade_num_2_total['消费占存量比']=trade_num_2_total['消费占存量比'].apply(lambda x:str(round(x*100,2))+'%')
+    # 画图
+    fig4=plt.figure('1994%s'%bid,figsize=(10,6))
+    plt.bar(trade_num_2_total['grid'],trade_num_2_total['消费占存量比'])
+    for a,b in zip(trade_num_2_total['grid'],trade_num_2_total['消费占存量比']):
+        plt.text(a,b,'%.2f%%' %(100*b),ha='center',va='bottom',fontsize=15)
+    plt.title('各等级会员存量中有消费会员的占比')
+    
+    plt.savefig('4%s有消费会员占存量的比——等级'%bid,dpi=200)
+    
+    
+    # =========================consuemhaha===================
+    
+    
+    
+    print('=========================')
+    print('consume')
+    
+    
+    # 获取等级
+    ccname='''select ccid as grid,ccname from welife_card_categories where bid=%i
+    -- and ccid in (3006675,3006902)
+    ''' %bid
+    ccname_d=wesql(ccname)
+    cate=ccname_d.ix[:,'ccname']
+    
+    
+    
+    
+    # 1.每月整体的营业额
+    consume_money=''' select  date_format(ftime,'%%Y%%m') as month,count(uid) as 消费次数,count(distinct(uid)) as 消费人数,
+    sum(tctotalfee/100) as 消费金额
+    from dprpt_welife_trade_consume_detail 
+    where bid=%i and tctype=2 and  ftime>=%s and ftime<%s 
+    group by date_format(ftime,'%%Y%%m') ''' %(bid,p.ftime_s,p.ftime_e)
+    
+    print('1计算每月的全部营业额')
+    consume_money_d=dwsql(consume_money)
+    # 画图的时候，按照横坐标已经自动的groupby
+    bar_h('13%s'%bid,consume_money_d['month'],consume_money_d['消费金额'],'每月会员整体营业额')
+    
+    # 2.首次消费和再次消费的情况
+    consume_firsttime_money='''select date_format(mintime,'%%Y%%m') 'month',
+    count(uid) as '首次消费次数',count(distinct(uid)) as 消费人数,sum(fee) '首次消费金额' 
+    from (select uid,tcTotalFee/100 fee,min(tclcreated) mintime
+    from dprpt_welife_trade_consume_detail 
+    where bid=%i
+    and ftime<%s
+    and tctype=2
+    group by uid) a
+    group by date_format(mintime,'%%Y%%m')''' %(bid,p.ftime_e)
+    print('2计算首次消费金额')
+    consume_firsttime_money_d=dwsql(consume_firsttime_money)
+    # 算出再次消费金额
+    re1=pd.merge(consume_money_d,consume_firsttime_money_d,on='month',how='left')
+    re1['再次消费金额']=re1['消费金额']-re1['首次消费金额']
+    re1=re1.fillna(0)
+    # print(re1.head())
+    alist=['首次消费金额','再次消费金额']
+    # line_h(14,re1['month'],re1['首次消费金额'],re1['再次消费金额'],'首次消费金额','再次消费金额','消费金额的构成')
+    double_line2('14%s'%bid, re1['month'], re1, '月份', '消费金额', alist, '消费金额的构成')
+    
+    
+    
+    
+    
+    # 3.各等级的营业额
+    consume_num_grid='''select date_format(ftime,'%%Y%%m') as '月份',grid ,sum(tctotalfee/100) '消费金额',
+    count(1) '消费次数',count(distinct(uid)) '消费人数'
+    from dprpt_welife_trade_consume_detail 
+    where  ftime>%s and ftime<%s  and bid=%i 
+    and tctype=2 
+    
+    -- and grid in (3004945,3007787,3009255,3007788,3007789)
+    
+    group by date_format(ftime,'%%Y%%m'),grid ''' %(p.ftime_s,p.ftime_e,bid)
+    
+    print('3计算各等级的消费金额')
+    consume_num_grid_d1=dwsql(consume_num_grid)
+    consume_num_grid_d=pd.merge(consume_num_grid_d1,ccname_d,on='grid')
+    re1=pd.pivot_table(consume_num_grid_d,index='ccname',values='消费次数',aggfunc=np.mean).reset_index()
+    re1_new_i=np.arange(len(re1))
+    # 万一re1的行数很少的话，取前两行
+    if len(re1)>3:
+        re1_sort=re1.sort_values(by='消费次数',ascending=False).set_index(re1_new_i).head(3)
+    else:
+        re1_sort=re1_sort=re1.sort_values(by='消费次数',ascending=False).set_index(re1_new_i).head(2)
+    
+    
+    # 只有将等级的名称列表化之后，才能在下面添加标签的时候，有选择性的添加前面3个等级的标签 
+    my_cate=list(re1_sort.ix[:,'ccname'])
+    consume_num_grid_d_pivot_table=pd.pivot_table(consume_num_grid_d,index='月份',columns='ccname',values='消费金额',aggfunc=np.sum).reset_index()
+    name_list=list(set(consume_num_grid_d['ccname']))
+    # print(name_list)
+    # d_name=[]
+    # for i in name_list:  有几个等级不想添加标签，所以去除了这些等级
+    #     if not i in ['小厨粉','积分金卡','积分白金卡']:
+    #         d_name.append(i)
+    double_line2('15%s'%bid, consume_num_grid_d_pivot_table['月份'], consume_num_grid_d_pivot_table,
+                 '月份', '消费金额(单位：元)', name_list, '各等级会员消费金额')
+    
+    
+    # 计算各等级的桌均
+    re3=consume_num_grid_d[['ccname','消费金额']].groupby(by='ccname').sum()
+    re4=consume_num_grid_d[['ccname','消费次数']].groupby(by='ccname').sum()
+    re5=pd.merge(re3,re4,left_index=True,right_index=True)
+    re5=re5.reset_index()
+    re5['桌均']=re5['消费金额']/re5['消费次数']
+    # print(re5.head())
+    
+    # 计算所有会员的桌均，用来衡量收银员操作可能出现的问题，如果单笔消费金额低于桌均的五分之一就认为该笔操作存在问题，因为很少有超过5个人一起过来消费的
+    total_consume=re5['消费金额'].sum()
+    total_consume_times=re5['消费次数'].sum()
+    # print(total_consume,total_consume_times)
+    consume_avg=total_consume/total_consume_times
+    consume_avg_5=consume_avg/5
+    # print(consume_avg_5)
+    # 这儿的16和下面的重复了，所以改成161
+    bar_h('161%s'%bid,re5['ccname'],re5['桌均'],'各等级会员桌均')
+    
+    
+    
+    
+    # 4.各分店的营业额与桌均
+    consume_month_sid='''select  sname '分店名',sum(tctotalfee/100) '消费金额',count(1) '消费次数',count(distinct(uid)) '消费人数',
+    sum(tctotalfee/100)/count(1) as '消费桌均'
+    from dprpt_welife_trade_consume_detail 
+    where bid=%i
+    and ftime>=%s
+    and ftime<%s
+    and tctype=2
+    and length(sname)>0
+    group by sname''' %(bid,p.ftime_s,p.ftime_e)
+    print('4计算分店的营业额和桌均')
+    consume_month_sid_d=dwsql(consume_month_sid)
+    
+    # 如果不int的话求不出平均值
+    consume_month_sid_d['消费金额']=consume_month_sid_d['消费金额'].apply(lambda x:int(x))
+    consume_month_sid_d['消费桌均']=consume_month_sid_d['消费桌均'].apply(lambda x:int(x))
+    consume_month_sid_d['消费桌均2']=consume_month_sid_d['消费桌均'].apply(lambda x:-int(x))
+    consume_month_sid_d_avg=consume_month_sid_d.mean().apply(lambda x:int(x))
+    # print(consume_month_sid_d_avg['消费次数'])
+    # 因为消费金额和桌均之间差了好几个量级，所以只能人为的传递一个量级进去，这样才能画出量小的柱子，而桌均是消费金额除以消费次数得来的，所以传递
+    # 消费次数的均值即可
+    
+    # 现在根据门店的多少来决定画几张图，如果30家门店一下，画一张，30-60家画两张，60-90家画三张，90家以上画四张
+    if len(consume_month_sid_d)>=30 and len(consume_month_sid_d) < 60:
+        a=int(len(consume_month_sid_d)/2)
+        consume_month_sid_d_30=consume_month_sid_d.iloc[0:int('%s' %a) ,:]
+        consume_month_sid_d_61=consume_month_sid_d.iloc[int('%s' %(a+1)):int('%s' %(2*a)),:]
+        xuanf2('45%s'%bid,consume_month_sid_d_30['分店名'],consume_month_sid_d_30['消费金额'],consume_month_sid_d_30['消费桌均'],consume_month_sid_d_avg['消费次数'],'分店消费金额和桌均对比1','消费金额','桌均')
+        xuanf2('46%s'%bid,consume_month_sid_d_61['分店名'],consume_month_sid_d_61['消费金额'],consume_month_sid_d_61['消费桌均'],consume_month_sid_d_avg['消费次数'],'分店消费金额和桌均对比2','消费金额','桌均')
+    elif len(consume_month_sid_d)>=60 and len(consume_month_sid_d) < 90:
+        a=int(len(consume_month_sid_d)/3)
+        consume_month_sid_d_30=consume_month_sid_d.iloc[0:int('%s' %a) ,:]
+        consume_month_sid_d_61=consume_month_sid_d.iloc[int('%s' %(a+1)):int('%s' %(2*a)),:]
+        consume_month_sid_d_91=consume_month_sid_d.iloc[int('%s' %(2*a)):int('%s'%(3*a)) ,:]
+        xuanf2('45%s'%bid,consume_month_sid_d_30['分店名'],consume_month_sid_d_30['消费金额'],consume_month_sid_d_30['消费桌均'],consume_month_sid_d_avg['消费次数'],'分店消费金额和桌均对比1','消费金额','桌均')
+        xuanf2('46%s'%bid,consume_month_sid_d_61['分店名'],consume_month_sid_d_61['消费金额'],consume_month_sid_d_61['消费桌均'],consume_month_sid_d_avg['消费次数'],'分店消费金额和桌均对比2','消费金额','桌均')
+        xuanf2('47%s'%bid,consume_month_sid_d_91['分店名'],consume_month_sid_d_91['消费金额'],consume_month_sid_d_91['消费桌均'],consume_month_sid_d_avg['消费次数'],'分店消费金额和桌均对比3','消费金额','桌均')
+    elif len(consume_month_sid_d)>=90:
+        a=int(len(consume_month_sid_d)/4)
+        consume_month_sid_d_30=consume_month_sid_d.iloc[0:int('%s' %a) ,:]
+        consume_month_sid_d_61=consume_month_sid_d.iloc[int('%s' %(a+1)):int('%s' %(2*a)),:]
+        consume_month_sid_d_91=consume_month_sid_d.iloc[int('%s' %(2*a)):int('%s'%(3*a)) ,:]
+        consume_month_sid_d_121=consume_month_sid_d.iloc[int('%s'%(3*a)) :,:]
+        xuanf2('45%s'%bid,consume_month_sid_d_30['分店名'],consume_month_sid_d_30['消费金额'],consume_month_sid_d_30['消费桌均'],consume_month_sid_d_avg['消费次数'],'分店消费金额和桌均对比1','消费金额','桌均')
+        xuanf2('46%s'%bid,consume_month_sid_d_61['分店名'],consume_month_sid_d_61['消费金额'],consume_month_sid_d_61['消费桌均'],consume_month_sid_d_avg['消费次数'],'分店消费金额和桌均对比2','消费金额','桌均')
+        xuanf2('47%s'%bid,consume_month_sid_d_91['分店名'],consume_month_sid_d_91['消费金额'],consume_month_sid_d_91['消费桌均'],consume_month_sid_d_avg['消费次数'],'分店消费金额和桌均对比3','消费金额','桌均')
+        xuanf2('48%s'%bid,consume_month_sid_d_121['分店名'],consume_month_sid_d_121['消费金额'],consume_month_sid_d_121['消费桌均'],consume_month_sid_d_avg['消费次数'],'分店消费金额和桌均对比4','消费金额','桌均')
+    else:
+        xuanf2('17%s'%bid,consume_month_sid_d['分店名'],consume_month_sid_d['消费金额'],consume_month_sid_d['消费桌均'],consume_month_sid_d_avg['消费次数'],'分店消费金额和桌均对比','消费金额','桌均')
+    
+    
+    
+    
+    # 消费密度部分(备注：在跑其他的数据，这里还没有验证）
+    print('    4.1各等级的消费均次')
+    # print(consume_num_grid_d1.head())
+    consume_num_grid_d2=pd.merge(consume_num_grid_d1,ccname_d,on='grid')
+    # print(consume_num_grid_d2)
+    consume_num_grid_d2=pd.pivot_table(consume_num_grid_d2,index='ccname',values=['消费次数','消费人数'],aggfunc=sum)
+    consume_num_grid_d2=consume_num_grid_d2.reset_index()
+    consume_num_grid_d2['消费均次']=consume_num_grid_d2['消费次数']/consume_num_grid_d2['消费人数']
+    
+    # print(consume_num_grid_d2)
+    bar_h2('18%s'%bid,consume_num_grid_d2['ccname'],consume_num_grid_d2['消费均次'],'各等级消费均次(月)')
+    plt.ylabel('消费均次')
+    
+    
+    
+    
+    # 5.消费转化率
+    consume_rate='''select trade_num '消费次数',count(uid) '消费人数'                                                                                                    
+    from (select uid,count(1) trade_num
+    from dprpt_welife_trade_consume_detail 
+    where ftime>=%s
+    and ftime<=%s
+    and tctype=2 and bid=%i
+    group by uid) a
+    group by trade_num
+    order by trade_num desc ''' %(p.ftime_s,p.ftime_e,bid)
+    print('5消费转化率')
+    consume_rate_d=dwsql(consume_rate)
+    consume_rate_d['consume_pop_num']=consume_rate_d['消费人数'].cumsum()
+    consume_rate_d=consume_rate_d.sort_values(by='消费次数')
+    consume_rate_d['conversion_rate']=consume_rate_d['consume_pop_num'].rolling(2).apply(lambda x:x.min()/x.max())
+    # consume_rate_d['conversion_rate']=consume_rate_d['conversion_rate'].apply(lambda x:float('%.2f' %x))
+    # 将“次”加在消费次数上
+    consume_rate_d['消费次数_ci']=consume_rate_d['消费次数'].apply(lambda x:str(x))+'次'
+    consume_rate_d=consume_rate_d[consume_rate_d['消费次数']<=25]
+    xuanf('%s' %bid,consume_rate_d['消费次数'],consume_rate_d['消费次数_ci'],consume_rate_d['consume_pop_num'],consume_rate_d['conversion_rate'],'消费转化率','消费人数','转化率')
+    
+    
+    # 6消费近度
+    consume_week='''select date_format(tclcreated,'%%w') 'w',
+    count(1) '消费次数',
+    round(sum(tctotalfee/100)/count(1),0) '桌均消费金额'
+    from dprpt_welife_trade_consume_detail
+    where ftime>=%s and ftime<%s and bid=%i
+    and tctype=2 
+    group by date_format(tclcreated,'%%w') ''' %(p.ftime_s,p.ftime_e,bid)
+    print('6周消费次数和桌均')
+    consume_week_d=dwsql(consume_week)
+    consume_week_d.ix[0,0]=7
+    consume_week_d['w']=consume_week_d['w'].apply(lambda x:int(x))
+    consume_week_d=consume_week_d.sort_values(by='w')
+    consume_week_d['星期']=['周一','周二','周三','周四','周五','周六','周天']
+    consume_week_d['周一']=consume_week_d['消费次数'].ix[1,1]
+    consume_week_d['次数权重(除以周一次数)']=consume_week_d['消费次数']/consume_week_d['周一']
+    xuanf('20%s'%bid,consume_week_d['w'],consume_week_d['星期'],consume_week_d['桌均消费金额'],consume_week_d['次数权重(除以周一次数)'],
+          '一周内每天消费次数和桌均对比','桌均','次数权重(除以周一次数)')
+          
+    
+    
+    
+    # 7.储过值会员和没有储值会员的消费周期和会员的流逝状态
+    
+    # 7.1消费周期
+    # 储值过的会员的第二次消费时间,之所以rank<3,这样可以一次性的取出第一次的消费和第二次的消费
+    charge_vip='''  select uid,fee,ftime_2,rank,ac_fee,charge_type from (
+    select uid,fee,ftime_2, charge_type,
+    @x:=if(@user_uid=uid,@x+1,1) as rank,
+    @y:=if(@user_uid=uid,@y+fee,fee) as ac_fee,
+    @user_uid:=uid as dummy
+    from
+    (select c.uid ,date_format(tccreated,'%%Y%%m%%d')  as ftime_2,tctotalfee/100 as fee,
+    case when length(s.id)>2 then 'charge_vip'
+    else  'non_charge_vip'
+    end as charge_type
+    from 
+    welife_trade_consumes c
+    left join (select uid ,id from welife_user_savings where bid=%i)  s on c.uid=s.uid
+    where  bid=%i and tcstatus=2 and tctype in (2,8)  ) t2,
+    (select @x:=0,@y:=0,@user_uid:=null) t1 
+    order by uid,ftime_2) result
+    where rank<3 and charge_type='charge_vip'  ''' %(bid,bid)
+    print('7储值过消费周期')
+    charge_vip_d=wesql(charge_vip)
+    if  charge_vip_d.empty:
+        charge_vip_d=pd.DataFrame({'rank':[1,2],'ftime_2':[20170101,20180101],'ac_fee':[0,0],'charge_type':[0,0],'fee':[0,0],'uid':[0,0]},index=[0,1])
+    # 取出第一次消费
+    charge_vip_d_1=charge_vip_d[charge_vip_d['rank']==1]
+    # 取出第二次消费
+    charge_vip_d_2=charge_vip_d[charge_vip_d['rank']==2]
+    charge_re1=pd.merge(charge_vip_d_1,charge_vip_d_2,on='uid')
+    
+    # 从原始的数据框里面选出只想要的列
+    charge_re1=charge_re1[['uid','ftime_2_x','ftime_2_y']]
+    # 转化成时间，然后相减
+    charge_re1['ftime_1']=charge_re1['ftime_2_x'].apply(lambda x:dtime.strptime(str(x),"%Y%m%d"))
+    charge_re1['ftime_2']=charge_re1['ftime_2_y'].apply(lambda x:dtime.strptime(str(x),"%Y%m%d"))
+    charge_re1['interval']=charge_re1['ftime_2']-charge_re1['ftime_1']
+    
+    # 求出每一个用户的两次间隔天数
+    charge_re1['days']=charge_re1['interval'].apply(lambda x:x.days)
+    
+    # 之所以要加if是因为有些商户确实没有开通储值的功能，这样画不出来的储值会员的消费周期，所以手动的修改了第一次和第二次消费的天数，以假装
+    # 可以算出消费周期,注意如果画出来的图里面消费周期是1的话，就是有问题的说明没有储值会员，需要被删除
+    if any(charge_re1['days'])<1:
+        charge_re1['days']=1  
+    # 应该来说间隔天数为0 ，是不对的，所以最好去掉，很有可能就是券的核销和消费算作同一次了
+    charge_re1=charge_re1[charge_re1['days']>0]
+    
+    
+    # print(charge_re1)
+    charge_vip_mean=charge_re1['days'].mean()
+    # print('charge_vip_mean',charge_re1['days'].mean())
+    # print(charge_re1.tail(10))
+    charge_re2=pd.pivot_table(charge_re1,index='days',values='uid',aggfunc=len)
+    
+    charge_re2=charge_re2.reset_index()
+    # 添加两列。一列是累计的人数一列是总人数,累计的数量是为了画出那条红色的累计曲线
+    # print(charge_re2.head())
+    if not charge_re2.empty:
+        
+        charge_re2['pop_cum']=charge_re2['uid'].cumsum()
+        charge_re2['totalsum']=charge_re2['uid'].sum()
+        # 求出累计占比
+        charge_re2['rate']=charge_re2['pop_cum']/charge_re2['totalsum']
+        
+        
+        # xuanf1没有添加数据标签，所以不用xuanf
+        # xuanf1(21,charge_re2['days'],charge_re2['uid'],charge_re2['rate'],'储值过会员消费周期','人数','累计占比',charge_vip_mean)
+        # 要画出唤醒的标签，现在不会直接用xuanf1之后，在对原来的图片进行修改，于是重新写一遍
+        
+        # =========================================以下就是画出消费周期，并且标注唤醒点============================================================
+        #charge_vip_mean如果是空的话，先赋值为0
+        cycle=int(charge_vip_mean)
+    
+        
+    
+        fig=plt.figure('21%s'%bid,figsize=(10,6),dpi=200)
+        ax1=fig.add_subplot(111)
+        bar_p=ax1.bar(charge_re2['days'],charge_re2['uid'])
+        plt.annotate('消费周期:%s天' %int(round(cycle,0)),xy=(charge_re2['days'].mean(),charge_re2['uid'].mean()+100),fontsize=20,color='r')
+        ax2=ax1.twinx()
+        line_p,=ax2.plot(charge_re2['days'],charge_re2['rate'],'r')
+    
+    
+        # 1.在消费周期处唤醒
+        # 思路是先让列表里面的值小于等于消费周期，然后取出新列表的最大值就是最接近消费周期的值，再取出该值对应的rate
+        cycle_1=charge_re2[charge_re2['days']<=cycle]['rate']
+        cycle_dot2=cycle_1.nlargest(1).values[0]
+        cycle_dot2_bai='%1.f%%' %((1-cycle_dot2)*100)
+        # 在曲线上标出一个散点
+        ax2.scatter(cycle,cycle_dot2,s=25,color='b')    
+        ax2.hlines(cycle_dot2,xmin=cycle,xmax=300,linestyles='dashed')
+        ax2.vlines(cycle,ymin=0,ymax=cycle_dot2,linestyles='dashed')
+        # xytext和textcoords是对点的平移设置
+        
+        ax2.annotate('消费周期%s天，此时%s客人需要唤醒' %(cycle,cycle_dot2_bai),xy=(cycle,cycle_dot2),xytext=(100,7),textcoords='offset points')
+    
+        
+    
+    
+    
+    # 以前画消费周期的时候还画出来20%和80%的唤醒点，后来取消
+    # # 2.20%处唤醒
+    # a1=0.2
+    # b1=charge_re2[charge_re2['rate']<=a1]
+    # b1_rate=b1['rate'].nlargest(1).values[0]
+    # b1_rate_bai='%1.f%%' %((1-b1_rate)*100)
+    # b1_days=b1['days'].nlargest(1).values[0]
+    # ax2.scatter(b1_days,b1_rate,s=25,color='b')
+    # ax2.hlines(b1_rate,xmin=b1_days,xmax=300,linestyles='dashed')
+    # ax2.vlines(b1_days,ymin=0,ymax=b1_rate,linestyles='dashed')
+    # ax2.annotate('%s天唤醒%s客人' %(b1_days,b1_rate_bai),xy=(b1_days,b1_rate),xytext=(100,7),textcoords='offset points')
+    # 
+    # # 3.80%处唤醒
+    # a11=0.8
+    # b11=charge_re2[charge_re2['rate']<=a11]
+    # b11_rate=b11['rate'].nlargest(1).values[0]
+    # b11_rate_bai='%1.f%%' %((1-b11_rate)*100)
+    # b11_days=b11['days'].nlargest(1).values[0]
+    # ax2.scatter(b11_days,b11_rate,s=25,color='b')
+    # ax2.hlines(b11_rate,xmin=b11_days,xmax=300,linestyles='dashed')
+    # ax2.vlines(b11_days,ymin=0,ymax=b11_rate,linestyles='dashed')
+    # ax2.annotate('%s天唤醒%s客人' %(b11_days,b11_rate_bai),xy=(b11_days,b11_rate),xytext=(100,7),textcoords='offset points')
+    
+    
+    
+    
+        plt.title('储值过会员消费周期')
+        plt.legend([bar_p,line_p],['%s' %'人数','%s' %'累计占比'],loc=3,bbox_to_anchor=[0,1],fontsize='small')
+        
+        plt.savefig('21%s储值过会员消费周期'%bid)
+    else:
+        fig=plt.figure(21,figsize=(10,6),dpi=200)
+        plt.bar(0,0)
+        
+        plt.savefig('21储值过会员消费周期')
+    # =========================================以上就是画出消费周期，并且标注唤醒点============================================================
+    
+    
+    
+    # 7.2根据求出来的mean来划分会员的状态
+    charge_vip_churn_rate='''select uid,max(ftime) as max_time,charge_type
+    from (
+    select c.uid ,date_format(tccreated,'%%Y%%m%%d')  as ftime,tctotalfee/100 as fee,
+    case when length(s.id)>2 then 'charge_vip'
+    else  'non_charge_vip'
+    end as charge_type
+    from 
+    welife_trade_consumes c
+    left join (select uid ,id from welife_user_savings where bid=%i)  s on c.uid=s.uid
+    where  bid=%i and tcstatus=2 and tctype in (2,8)  ) a
+    where charge_type='charge_vip'
+    group by uid''' %(bid,bid)
+    print('    7.1储值过各等级流失率')
+    charge_vip_churn_rate_d=wesql(charge_vip_churn_rate)
+    if charge_vip_churn_rate_d.empty:
+        charge_vip_churn_rate_d=pd.DataFrame({'max_time':[20170101],'uid':0,'charge_type':[0]},index=[0])
+    charge_vip_churn_rate_d['today']=dtime.now().strftime("%Y%m%d")
+    charge_vip_churn_rate_d['max_time']=charge_vip_churn_rate_d['max_time'].apply(lambda x:dtime.strptime(str(x),"%Y%m%d"))
+    charge_vip_churn_rate_d['today']=charge_vip_churn_rate_d['today'].apply(lambda x:dtime.strptime(str(x),"%Y%m%d"))
+    charge_vip_churn_rate_d['interval']=charge_vip_churn_rate_d['today']-charge_vip_churn_rate_d['max_time']
+    charge_vip_churn_rate_d['days']=charge_vip_churn_rate_d['interval'].apply(lambda x:x.days)
+    # 将今天的时间和会员的最后一天相减之后，再用np.where判定出会员的状态
+    charge_vip_churn_rate_d['status']=np.where(charge_vip_churn_rate_d['days']>3*charge_vip_mean,'沉睡会员' ,
+                                               np.where((charge_vip_churn_rate_d['days']>2*charge_vip_mean)&(charge_vip_churn_rate_d['days']<=3*charge_vip_mean),'半睡会员',
+                                                                                                                   np.where((charge_vip_churn_rate_d['days']>charge_vip_mean)&(charge_vip_churn_rate_d['days']<=2*charge_vip_mean),'瞌睡会员','活跃会员')))
+     
+    charge_vip_churn_rate_d_re3=pd.pivot_table(charge_vip_churn_rate_d,index='status',values='uid',aggfunc=len)
+    charge_vip_churn_rate_d_re3=charge_vip_churn_rate_d_re3.reset_index()
+    charge_vip_churn_rate_d_re3['total']=charge_vip_churn_rate_d_re3['uid'].sum()
+    charge_vip_churn_rate_d_re3['rate']=charge_vip_churn_rate_d_re3['uid']/charge_vip_churn_rate_d_re3['total']
+    
+    # print(charge_vip_churn_rate_d_re3.head())
+    bar_h3('23%s'%bid,charge_vip_churn_rate_d_re3.index,charge_vip_churn_rate_d_re3['status'],charge_vip_churn_rate_d_re3['rate'],'储值会员不同程度流失数量占比')
+    
+    
+    # 以上是各等级的流逝数量，还想要画出各分店流失会员数量
+    # 7.3各分店的流逝会员数量,依据sid,和uid来group,这样即使存在跨店消费的也会算在某个店的流逝上
+    charge_vip_churn_rate_sid='''select sname,uid,charge_type,max(ftime) as max_time
+    from (
+    select c.uid ,sname,date_format(tccreated,'%%Y%%m%%d')  as ftime,tctotalfee/100 as fee,
+    case when length(s.id)>2 then 'charge_vip'
+    else  'non_charge_vip'
+    end as charge_type
+    from 
+    welife_trade_consumes c inner join welife_shops shop on c.bid=shop.bid and  c.sid=shop.sid
+    left join (select uid ,id from welife_user_savings where bid=%i)  s on c.uid=s.uid
+    where  c.bid=%i and tcstatus=2 and tctype in (2,8)  ) a
+    where charge_type='charge_vip'
+    group by sname,charge_type,uid''' %(bid,bid)
+    print('    7.2储值过分店流失数量')
+    charge_vip_churn_rate_sid_d=wesql(charge_vip_churn_rate_sid)
+    if charge_vip_churn_rate_sid_d.empty:
+        charge_vip_churn_rate_sid_d=pd.DataFrame({'sname':0,'uid':0,'charge_type':0,'max_time':20170101},index=[0])
+    # print(charge_vip_churn_rate_sid_d.head())
+    if not charge_vip_mean>0:  #如果charge_vip_mean是空值的话，就暂时赋值为0
+        charge_vip_mean=0
+    
+    to_days(charge_vip_churn_rate_sid_d,charge_vip_churn_rate_sid_d['max_time'],charge_vip_mean)
+    # print(charge_vip_churn_rate_sid_d.tail())
+    charge_vip_churn_rate_sid_d=pd.pivot_table(charge_vip_churn_rate_sid_d,index=['sname','status'],values='uid',aggfunc=len)
+    charge_vip_churn_rate_sid_d=charge_vip_churn_rate_sid_d.reset_index()
+    # print(charge_vip_churn_rate_sid_d.head())
+    charge_vip_churn_rate_sid_d_liushi=charge_vip_churn_rate_sid_d[charge_vip_churn_rate_sid_d['status']=='沉睡会员']
+    
+    charge_vip_churn_rate_sid_d_liushi=charge_vip_churn_rate_sid_d_liushi.sort_values(by='uid',ascending=False)
+    # print(charge_vip_churn_rate_sid_d_liushi)
+    charge_vip_churn_rate_sid_d_liushi=charge_vip_churn_rate_sid_d_liushi.sort_values(by='uid',ascending=False)
+    charge_vip_churn_rate_sid_d_liushi=charge_vip_churn_rate_sid_d_liushi.nlargest(20, 'uid')
+    w_liushi=pd.ExcelWriter('charge_vip_churn_rate_sid_d_liushi.xlsx')
+    charge_vip_churn_rate_sid_d_liushi.to_excel(w_liushi,'charge')
+    if len(charge_vip_churn_rate_sid_d_liushi)<20:
+        bar_h('25%s'%bid,charge_vip_churn_rate_sid_d_liushi['sname'],charge_vip_churn_rate_sid_d_liushi['uid'],'分店储值过会员的流失数量')
+    else:
+        bar_h('25%s'%bid,charge_vip_churn_rate_sid_d_liushi['sname'],charge_vip_churn_rate_sid_d_liushi['uid'],'分店储值过会员的流失数量_前20家门店')
+    # else:
+    #     w_liushi=pd.ExcelWriter('charge_vip_churn_rate_sid_d_liushi.xlsx')
+    #     charge_vip_churn_rate_sid_d_liushi.to_excel(w_liushi,'charge')
+    #     fig=plt.figure(25)
+    #     plt.bar(0,0)
+    #     plt.savefig('25分店储值过会员的流失数量_前20家门店')
+    
+    
+    
+    
+    
+    # 没有储值过的会员的消费周期（没有储值过的情况和储值过的会员的取数据方式几乎一样，所以不在描叙
+    non_charge_vip='''  select uid,fee,ftime_2,rank,ac_fee,charge_type from (
+    select uid,fee,ftime_2, charge_type,
+    @x:=if(@user_uid=uid,@x+1,1) as rank,
+    @y:=if(@user_uid=uid,@y+fee,fee) as ac_fee,
+    @user_uid:=uid as dummy
+    from
+    (select c.uid ,date_format(tccreated,'%%Y%%m%%d')  as ftime_2,tctotalfee/100 as fee,
+    case when length(s.id)>2 then 'charge_vip'
+    else  'non_charge_vip'
+    end as charge_type
+    from 
+    (select uid,tccreated,tctotalfee
+    from welife_trade_consumes 
+    where bid=%i and tccreated>=%s and tccreated<%s and 
+    tcstatus=2 and tctype in (2,8) )  c
+    
+    left join (select uid ,id from welife_user_savings where bid=%i)  s on c.uid=s.uid
+    
+    left join (select uid,uConsumeNum from welife%s.welife_users%s where bid=%i )  u1 on c.uid=u1.uid
+    where uConsumeNum>1
+     ) t2,
+    (select @x:=0,@y:=0,@user_uid:=null) t1 
+    order by uid,ftime_2) result
+    where rank<3 and charge_type='non_charge_vip'  ''' %(bid,p.ftime_s,p.ftime_e,bid,dbs,tbs,bid)
+    print('    7.3未储值过的消费周期')
+    non_charge_vip_d=wesql(non_charge_vip)
+    
+    
+    # 有时候non_charge_vip_d是空的，所以人为的制造了一个non_charge_vip_d的数据框
+    if non_charge_vip_d.empty:
+        non_charge_vip_d=pd.DataFrame({'ac_fee':[0,0],'charge_type':['non_charge_vip','non_charge_vip'],'fee':[0,0],'ftime_2':[20170101,20170201],'rank':[1,2],'uid':[000,000]},index=[0,1])   
+    
+    
+    
+    non_charge_vip_d_1=non_charge_vip_d[non_charge_vip_d['rank']==1]
+    non_charge_vip_d_2=non_charge_vip_d[non_charge_vip_d['rank']==2]
+    non_charge_re2=pd.merge(non_charge_vip_d_1,non_charge_vip_d_2,on='uid')
+    non_charge_re2=non_charge_re2[['uid','ftime_2_x','ftime_2_y']]
+    non_charge_re2['ftime_1']=non_charge_re2['ftime_2_x'].apply(lambda x:dtime.strptime(str(x),"%Y%m%d"))
+    non_charge_re2['ftime_2']=non_charge_re2['ftime_2_y'].apply(lambda x:dtime.strptime(str(x),"%Y%m%d"))
+    non_charge_re2['interval']=non_charge_re2['ftime_2']-non_charge_re2['ftime_1']
+    non_charge_re2['days']=non_charge_re2['interval'].apply(lambda x:x.days)
+    # 这个地方出现了days=0的情况，而且是极大值，所以去掉
+    non_charge_re2=non_charge_re2[non_charge_re2['days']>0]
+    
+    # print(non_charge_re2['days'].mean())
+    non_charge_vip_mean=non_charge_re2['days'].mean()
+    # print('non_charge_vip_mean,',non_charge_vip_mean)
+    non_charge_re2_re2=pd.pivot_table(non_charge_re2,index='days',values='uid',aggfunc=len)
+    # print(non_charge_re2_re2)
+    non_charge_re2_re2=non_charge_re2_re2.reset_index()
+    
+    # print(non_charge_re2_re2.head())
+    if non_charge_re2_re2.empty:
+        non_charge_re2_re2=pd.DataFrame({'uid':0,'days':0},index=[0])
+        
+    non_charge_re2_re2['pop_cum']=non_charge_re2_re2['uid'].cumsum()
+    non_charge_re2_re2['totalsum']=non_charge_re2_re2['uid'].sum()
+    non_charge_re2_re2['rate']=non_charge_re2_re2['pop_cum']/non_charge_re2_re2['totalsum']
+    # xuanf1(22,non_charge_re2_re2['days'],non_charge_re2_re2['uid'],non_charge_re2_re2['rate'],'非储值会员的消费周期','人数','累计占比',non_charge_vip_mean)
+    
+    
+    # =========================================以下就是画出消费周期，并且标注唤醒点============================================================
+    if  non_charge_vip_mean>0:
+        cycle_non=int(non_charge_vip_mean)
+    else:
+        cycle_non=0
+    
+    fig=plt.figure('22%s'%bid,figsize=(10,6),dpi=200)
+    ax1=fig.add_subplot(111)
+    bar_p=ax1.bar(non_charge_re2_re2['days'],non_charge_re2_re2['uid'])
+    plt.annotate('消费周期:%s天' %int(round(cycle_non,0)),xy=(non_charge_re2_re2['days'].mean(),non_charge_re2_re2['uid'].mean()+100),fontsize=20,color='r')
+    ax2=ax1.twinx()
+    line_p,=ax2.plot(non_charge_re2_re2['days'],non_charge_re2_re2['rate'],'r')
+    
+    
+    # 1.在消费周期处唤醒
+    
+    cycle_1=non_charge_re2_re2[non_charge_re2_re2['days']<=cycle_non]['rate']
+    # print(cycle_1)
+    if cycle_1.empty:
+        cycle_dot2=0
+    else:
+        cycle_1=cycle_1.fillna(0)
+        cycle_dot2=cycle_1.nlargest(1).values[0]
+    cycle_dot2_bai='%1.f%%' %((1-cycle_dot2)*100)
+    ax2.scatter(cycle_non,cycle_dot2,s=25,color='b')    
+    ax2.hlines(cycle_dot2,xmin=cycle_non,xmax=300,linestyles='dashed')
+    ax2.vlines(cycle_non,ymin=0,ymax=cycle_dot2,linestyles='dashed')
+    ax2.annotate('消费周期%s天，此时%s客人需要唤醒'  %(cycle_non,cycle_dot2_bai),xy=(cycle_non,cycle_dot2),xytext=(100,7),textcoords='offset points')
+    
+    
+    plt.title('非储值会员的消费周期')
+    
+    plt.legend([bar_p,line_p],['%s' %'人数','%s' %'累计占比'],loc=3,bbox_to_anchor=[0,1],fontsize='small')
+    plt.savefig('22%s非储值会员的消费周期'%bid)
+    
+    # =========================================以上就是画出消费周期，并且标注唤醒点==============
+    
+    # 根据求出来的mean来划分会员的状态
+    non_charge_vip_mean_sql='''select uid,max(ftime) as max_time,charge_type
+    from (
+    select c.uid ,date_format(tccreated,'%%Y%%m%%d')  as ftime,tctotalfee/100 as fee,
+    case when length(s.id)>2 then 'charge_vip'
+    else  'non_charge_vip'
+    end as charge_type
+    from 
+    (select uid,tccreated,tctotalfee
+    from welife_trade_consumes 
+    where bid=%i and tccreated>=%s and tccreated<%s and 
+    tcstatus=2 and tctype in (2,8)) c
+    left join (select uid ,id from welife_user_savings where bid=%i)  s on c.uid=s.uid  ) a
+    where charge_type='non_charge_vip'
+    group by uid''' %(bid,p.ftime_s,p.ftime_e,bid)
+    print('    7.4未储值过流失率')
+    non_charge_vip_churn_rate_d=wesql(non_charge_vip_mean_sql)
+
+    
+    if non_charge_vip_churn_rate_d.empty:
+        non_charge_vip_churn_rate_d=pd.DataFrame({'uid':0,'max_time':'20170101','charge_type':0},index=[0,1])   
+
+    
+    
+    non_charge_vip_churn_rate_d['today']=dtime.now().strftime("%Y%m%d")
+    non_charge_vip_churn_rate_d['max_time']=non_charge_vip_churn_rate_d['max_time'].apply(lambda x:dtime.strptime(str(x),"%Y%m%d"))
+    non_charge_vip_churn_rate_d['today']=non_charge_vip_churn_rate_d['today'].apply(lambda x:dtime.strptime(str(x),"%Y%m%d"))
+    non_charge_vip_churn_rate_d['interval']=non_charge_vip_churn_rate_d['today']-non_charge_vip_churn_rate_d['max_time']
+    non_charge_vip_churn_rate_d['days']=non_charge_vip_churn_rate_d['interval'].apply(lambda x:x.days)
+    non_charge_vip_churn_rate_d['status']=np.where(non_charge_vip_churn_rate_d['days']>3*non_charge_vip_mean,'沉睡会员',
+                                               np.where((non_charge_vip_churn_rate_d['days']>2*non_charge_vip_mean)&(non_charge_vip_churn_rate_d['days']<=3*non_charge_vip_mean),'瞌睡会员',
+                                                                                                                   np.where((non_charge_vip_churn_rate_d['days']>non_charge_vip_mean)&(non_charge_vip_churn_rate_d['days']<=2*non_charge_vip_mean),'半睡会员','活跃会员')))
+     
+    non_charge_vip_churn_rate_d_re3=pd.pivot_table(non_charge_vip_churn_rate_d,index='status',values='uid',aggfunc=len)
+    non_charge_vip_churn_rate_d_re3=non_charge_vip_churn_rate_d_re3.reset_index()
+    non_charge_vip_churn_rate_d_re3['total']=non_charge_vip_churn_rate_d_re3['uid'].sum()
+    non_charge_vip_churn_rate_d_re3['rate']=non_charge_vip_churn_rate_d_re3['uid']/non_charge_vip_churn_rate_d_re3['total']
+    
+    # print(non_charge_vip_churn_rate_d_re3.head())
+    bar_h3('24%s'%bid,non_charge_vip_churn_rate_d_re3.index,non_charge_vip_churn_rate_d_re3['status'],non_charge_vip_churn_rate_d_re3['rate'],'非储值会员不同程度流失数量占比')
+    
+    
+    
+    
+    # 分店非储值会员的流逝数量
+    non_charge_vip_churn_rate_sid='''select sname,uid,charge_type,max(ftime) as max_time
+    from (
+    select c.uid ,sname,date_format(tccreated,'%%Y%%m%%d')  as ftime,tctotalfee/100 as fee,
+    case when length(s.id)>2 then 'charge_vip'
+    else  'non_charge_vip'
+    end as charge_type
+    from 
+    
+    (select uid,tccreated,tctotalfee,sid,bid
+    from welife_trade_consumes 
+    where bid=%i and  tccreated>=%s and tccreated<%s and 
+    tcstatus=2 and tctype in (2,8)) c 
+    
+    inner join welife_shops shop on c.bid=shop.bid and  c.sid=shop.sid
+    left join (select uid ,id from welife_user_savings where bid=%i)  s on c.uid=s.uid ) a
+    where charge_type='non_charge_vip'
+    group by sname,charge_type,uid''' %(bid,p.ftime_s,p.ftime_e,bid)
+    print('    7.5未储值过会员分店的流失数量')
+    non_charge_vip_churn_rate_sid_d=wesql(non_charge_vip_churn_rate_sid)
+
+    if non_charge_vip_churn_rate_sid_d.empty:
+        non_charge_vip_churn_rate_sid_d=pd.DataFrame({'uid':0,'max_time':'20170101','charge_type':0},index=[0,1])   
+    
+    
+    if not non_charge_vip_mean>0:
+        non_charge_vip_mean=0
+        
+        
+    to_days(non_charge_vip_churn_rate_sid_d,non_charge_vip_churn_rate_sid_d['max_time'],non_charge_vip_mean)
+    print(charge_vip_churn_rate_sid_d.tail())
+    non_charge_vip_churn_rate_sid_d=pd.pivot_table(non_charge_vip_churn_rate_sid_d,index=['sname','status'],values='uid',aggfunc=len)
+    non_charge_vip_churn_rate_sid_d=non_charge_vip_churn_rate_sid_d.reset_index()
+    
+    # 这儿报了一个奇怪的错误，所以加了这一句status的类型转换
+    non_charge_vip_churn_rate_sid_d['status']=non_charge_vip_churn_rate_sid_d['status'].apply(lambda x:str(x))
+    
+    
+    
+    non_charge_vip_churn_rate_sid_d_liushi=non_charge_vip_churn_rate_sid_d[non_charge_vip_churn_rate_sid_d['status']=='沉睡会员']
+    
+    if non_charge_vip_churn_rate_sid_d_liushi.empty:
+        non_charge_vip_churn_rate_sid_d_liushi=pd.DataFrame({'uid':0,'sname':'需要删除'},index=[0])
+        
+    non_charge_vip_churn_rate_sid_d_liushi=non_charge_vip_churn_rate_sid_d_liushi.sort_values(by='uid',ascending=False)
+    non_charge_vip_churn_rate_sid_d_liushi=non_charge_vip_churn_rate_sid_d_liushi.nlargest(20, 'uid')
+    non_charge_vip_churn_rate_sid_d_liushi.to_excel(w_liushi,'nocharge')
+    w_liushi.save()
+    if len(non_charge_vip_churn_rate_sid_d_liushi)<20:
+        bar_h('26%s'%bid,non_charge_vip_churn_rate_sid_d_liushi['sname'],non_charge_vip_churn_rate_sid_d_liushi['uid'],'分店非储值会员的流失数量')
+    else:
+        bar_h('26%s'%bid,non_charge_vip_churn_rate_sid_d_liushi['sname'],non_charge_vip_churn_rate_sid_d_liushi['uid'],'分店非储值会员的流失数量')
+    
+  
+    
+    
+    # 8.每月操作可能有问题订单数
+    action_error='''select date_format(tclcreated,'%%Y%%m') 'month',count(uid) 'total_num',
+    count(case when tcTotalFee/100<%s then uid end) 'error_num',
+    count(case when tcTotalFee/100<%s then uid end)/count(uid) 'error_rate'
+    from dprpt_welife_trade_consume_detail 
+    where bid=%i
+    and ftime>=%s
+    and ftime<=%s
+    and tctype=2
+    group by month'''  %(consume_avg_5,consume_avg_5,bid,p.ftime_s,p.ftime_e)
+    print('8.每月操作可能有问题订单')
+    action_error_d=dwsql(action_error)
+    fig=plt.figure('43%s'%bid,figsize=(10,6))
+    plt.plot(action_error_d['month'],action_error_d['error_rate'],'-o')
+    
+    autolabel2(action_error_d['month'],action_error_d['error_rate'],12)
+    plt.xlabel('月份')
+    plt.ylabel('可能有问题操作占比')
+    plt.title('每月操作可能有问题占比')
+    
+    plt.savefig('43%s每月操作可能有问题占比'%bid)
+    
+    
+    
+    # 8.1分店操作可能有问题占比
+    action_error_sname='''select sname ,count(uid) 'total_num',
+    count(case when tcTotalFee/100<%s then uid end) 'error_num',
+    count(case when tcTotalFee/100<%s then uid end)/count(uid) 'error_rate'
+    from dprpt_welife_trade_consume_detail 
+    where bid=%i
+    and ftime>=%s
+    and ftime<=%s
+    and tctype=2
+    and length(sname)>0
+    group by sname'''   %(consume_avg_5,consume_avg_5,bid,p.ftime_s,p.ftime_e)
+    print('8.1分店可能有问题订单数')
+    action_error_sname_d=dwsql(action_error_sname)
+    # 取出占比最高的5家店面
+    action_error_sname_d_dayu=action_error_sname_d[action_error_sname_d['error_num']>0]
+    action_error_sname_d_5_sname=action_error_sname_d_dayu.nlargest(5, 'error_num')
+    # print(action_error_sname_d_5_sname)
+    bar_h2('44%s'%bid,action_error_sname_d_5_sname['sname'],action_error_sname_d_5_sname['error_rate'],'操作可能有问题占比较高门店')
+    
+    w=pd.ExcelWriter('%s消费数据.xlsx' %bsname)
+    
+    consume_money_d.to_excel(w,'每月会员整体营业额')
+    re1.to_excel(w,'首次消费和再次消费')
+    consume_num_grid_d_pivot_table.to_excel(w,'各等级营业额')
+    re5.to_excel(w,'各等级桌均')
+    del consume_month_sid_d['消费桌均2']
+    consume_month_sid_d.to_excel(w,'各分店的营业额与桌均')
+    # 这个文件在to_pptx里面要用到，来判断门店数量的多少
+    w21=pd.ExcelWriter('各分店的营业额与桌均.xlsx')
+    consume_month_sid_d.to_excel(w21,'data')
+    w21.save()
+    consume_num_grid_d2.to_excel(w,'各等级消费均次(月)')
+    consume_rate_d=consume_rate_d.rename(columns={'consume_pop_num':'累计消费人数','conversion_rate':'转化率'})
+    consume_rate_d[['累计消费人数','转化率']].to_excel(w,'消费转化率')
+    consume_week_d.to_excel(w,'周内各天消费')
+    
+    charge_vip_churn_rate_d_re3=charge_vip_churn_rate_d_re3.rename(columns={'status':'状态','uid':'人数','rate':'占比'})
+    charge_vip_churn_rate_d_re3[['状态','人数','占比']].to_excel(w,'储过值会员流失数量')
+    charge_vip_churn_rate_sid_d_liushi=charge_vip_churn_rate_sid_d_liushi.rename(columns={'sname':'门店','status':'状态','uid':'人数'})
+    charge_vip_churn_rate_sid_d_liushi.to_excel(w,'储过值分店流失数量')
+    non_charge_vip_churn_rate_d_re3=non_charge_vip_churn_rate_d_re3.rename(columns={'status':'状态','uid':'人数','rate':'占比'})
+    non_charge_vip_churn_rate_d_re3[['状态','人数','占比']].to_excel(w,'未储值会员流失数量')
+    
+    non_charge_vip_churn_rate_sid_d_liushi=non_charge_vip_churn_rate_sid_d_liushi.rename(columns={'sname':'门店','status':'状态','uid':'人数'})
+    non_charge_vip_churn_rate_sid_d_liushi.to_excel(w,'未储值分店流失数量')
+    action_error_d.to_excel(w,'每月操作可能有问题订单')
+    action_error_sname_d_5_sname.to_excel(w,'分店可能有问题订单数')
+    w.save()
+    
+    # ===============chargehaha==========================
+    
+    
+    print('=========================')
+    print('储值')
+    print('=========================')
+    
+    
+    
+    # 获取分店名称
+    sname='''select sid,sname from welife_shops where bid=%i''' %bid
+    sname_d=wesql(sname)
+    sname_d['sid']=sname_d['sid'].apply(lambda x:str(x))
+    
+    
+    # 获取会员的等级
+    ccname='''select ccid,ccname as grid from welife_card_categories where bid=%i'''%bid
+    ccname_d=wesql(ccname)
+    # 1.储值金额消耗
+    charge_consume='''select date_format(ftime,'%%Y%%m') '月份',
+    sum(case when tctype in (2,8) then tclprinciple/100 end) - ifnull(sum(case when tctype=3 then tclprinciple/100 end),0) '储值实收消耗'
+    from dprpt_welife_trade_consume_detail
+    where bid=%i
+    and ftime>=%s
+    and ftime<%s
+    group by date_format(ftime,'%%Y%%m')'''  %(bid,p.ftime_s,p.ftime_e)
+    # 计算每月的储值消耗
+    print('1储值消耗')
+    charge_consume_d=dwsql(charge_consume)
+    charge_consume_d.fillna(0,inplace=True)
+    # print(charge_consume_d)
+    # 在名称里面加1其实是新增加了一列，因为千分位之后是str，求储值沉淀的时候不能相减，所以还是保留了原来的列
+    charge_consume_d['储值实收消耗1']=charge_consume_d['储值实收消耗'].apply(lambda x:"{:,}".format(int(x)))
+    
+    # 2.储值金额实收
+    charge_tcsale='''select date_format(c.tccreated,'%%Y%%m') '月份',sum(c.tcsale/100) '储值金额实收'
+    from welife_trade_charges c 
+    where c.bid=%i
+    and c.tccreated >= %s 
+    and  c.tccreated < %s 
+    and tcChargeType <> 19
+    and c.tcStatus=1 and c.tctype=1
+    group by date_format(c.tccreated,'%%Y%%m')''' %(bid,p.ftime_s,p.ftime_e)
+    # 每个月的储值实收
+    print('2储值金额实收')
+    charge_tcsale_d=wesql(charge_tcsale)
+    if charge_tcsale_d.empty:
+        charge_tcsale_d=charge_consume_d.copy()
+        charge_tcsale_d.rename(columns={'储值实收消耗1':'储值金额实收1','储值实收消耗':'储值金额实收'},inplace=True)
+    #     print(charge_tcsale_d)
+    else:
+        charge_tcsale_d['储值金额实收1']=charge_tcsale_d['储值金额实收'].apply(lambda x:"{:,}".format(int(x)))
+    
+    
+    
+    # 81到86是后加的，如果有问题可以注释，然后跑原来的
+    charge_saving_and_consume=pd.merge(charge_tcsale_d,charge_consume_d,on='月份',how='left').fillna(0)
+    # print(charge_saving_and_consume)
+    charge_consume_list=['储值金额实收','储值实收消耗']
+    double_line2('1%s'%bid, charge_saving_and_consume['月份'], charge_saving_and_consume, '月份', '金额(单位：元)',
+                  charge_consume_list, '每月的储值实收和消耗')
+    
+    # 3.计算每月的储值沉淀
+    print('3储值沉淀')
+    charge_saving=pd.merge(charge_tcsale_d,charge_consume_d,on=['月份'])
+    
+    
+    charge_saving['储值沉淀']=charge_saving['储值金额实收']-charge_saving['储值实收消耗']
+    charge_saving['储值沉淀']=charge_saving['储值沉淀'].apply(lambda x:int(x))
+    charge_saving['累计储值沉淀']=charge_saving['储值沉淀'].cumsum()
+    
+    # print(charge_saving)
+    
+    fig=plt.figure('2%s'%bid,figsize=(10,6))
+    my_index=np.arange(len(charge_saving))
+    plt.bar(my_index,charge_saving['储值沉淀'])
+    plt.plot(my_index,charge_saving['累计储值沉淀'],'r-o')
+    
+    
+    for a,b in zip(my_index,charge_saving['累计储值沉淀']):
+        if a%2==0:
+            plt.text(a,b,'{:,}'.format(b),ha='center',va='baseline',fontsize=13)
+        
+        
+        
+    for a,b in zip(my_index,charge_saving['储值沉淀']):
+            plt.text(a,b,'{:,}'.format(b),ha='center',va='baseline',fontsize=13)
+        
+        
+        
+    plt.title('每月的储值沉淀')
+    plt.xlabel('月份')
+    plt.xticks(my_index,charge_saving['月份'],fontsize=12,rotation=30)
+    plt.legend(['累计储值沉淀','当月储值沉淀'])
+    plt.ylabel("金额（单位：元）")
+    
+    plt.savefig('6%s每月的储值沉淀'%bid,dpi=200)
+    
+    
+    
+    # 4.分店每月的储值金额
+    charge='''select sid,date_format(tcCreated,'%%Y%%m') as 'month',
+    sum(tcsale/100) as 'charge_mount',count(distinct(uid)) as 'charge_num'
+    from welife_trade_charges where bid=%i
+    and tcCreated >= %s
+    and tcCreated < %s
+    and tcType=1 and tcStatus=1 and tcChargeType <> 19
+    group by sid,month ''' %(bid,p.ftime_s,p.ftime_e)
+    print('4计算门店的所有储值')
+    charge_d=wesql(charge)
+    
+    if not charge_d.empty:
+        charge_d['charge_mount']=charge_d['charge_mount'].apply(lambda x:int(x))
+    else:
+        charge_d=pd.DataFrame({'sid':0,'month':0,'charge_mount':0,'charge_num':0},index=[0])
+        
+    charge_d_grouped=charge_d['charge_mount'].groupby(charge_d['sid']).sum()
+    charge_d_grouped=charge_d_grouped.reset_index()
+    # 得到门店的中文名称和每个门店的所有储值金额
+    charge_d_grouped_m=pd.merge(charge_d_grouped,sname_d,on='sid')
+    # 刀小蛮的charge_d_grouped_m是空的，他们储值卡都是手工增加后送出去的
+    if not charge_d_grouped_m.empty:
+        fig=plt.figure('3323%s'%bid,figsize=(10,6))
+        x=np.arange(charge_d_grouped_m['sname'].count())
+        xticks1=charge_d_grouped_m.sort_values(by='charge_mount')['sname']
+        c=list(zip(x,charge_d_grouped_m['charge_mount']))
+        c.sort(key=itemgetter(1))
+        labels,value=zip(*c)
+        indexs=np.arange(len(c))
+        plt.bar(indexs,value,align='center',width=0.75)
+        plt.xticks(indexs,xticks1,size='small',rotation=45)
+         
+        for a,b in zip(indexs,value):
+        #     将标签的字体变大了，如果全部添加的话，重叠太多，所以只选择部分添加标签
+            if len(indexs)<20:
+                plt.text(a,b+2,'{:,}'.format(b),ha='center',va='bottom',fontsize=10)
+            else:
+                if a%2==0:
+                    plt.text(a,b+2,'{:,}'.format(b),ha='center',va='bottom',fontsize=10)
+        
+        plt.title('各门店总储值金额')
+        
+        plt.savefig('7%s门店所有的储值金额'%bid,dpi=200)
+    else :#插入一张空白的figure,在ppt里面去手动删除吧
+        fig=plt.figure(3323,figsize=(10,6))
+        
+        plt.savefig('7%s门店所有的储值金额'%bid,dpi=200)
+    
+    
+    # 5.分店的首次充值金额
+    charge_first='''select t1.sid as sid ,date_format(t1.tcCreated,'%%Y%%m') as 'month',
+    sum(t1.tcsale/100) as 'first_chargemount',
+    count(distinct(t2.uid)) as 'first_chargenum'
+    from welife_trade_charges t1 
+    
+    inner join(select  uid,min(tccreated) as tccreated from welife_trade_charges 
+    where bid=%i and  tccreated>%s and tccreated < %s
+    and tcType=1 and tcStatus=1 and tcChargeType <> 19 group by uid) t2 
+    
+    on t1.uid=t2.uid and t1.tccreated=t2.tccreated 
+    group by t1.sid,date_format(t1.tcCreated,'%%Y%%m') ''' %(bid,p.ftime_s,p.ftime_e)
+    
+    # 开始计算每月的再次储值和首次储值
+    print('5计算首次和再次储值')
+    charge_first_d=wesql(charge_first)
+    if charge_first_d.empty:
+        charge_first_d=pd.DataFrame({'sid':0,'month':0,'first_chargemount':0,'first_chargenum':0},index=[0])
+    
+    charge_first_d_grouped=charge_first_d['first_chargemount'].groupby(by=charge_first_d['month']).sum()
+    charge_first_d_grouped=charge_first_d_grouped.reset_index()
+    
+    # 拿到上面计算的所有储值
+    charge_d_grouped_total=charge_d['charge_mount'].groupby(charge_d['month']).sum()
+    charge_d_grouped_total=charge_d_grouped_total.reset_index()
+    # 合并计算再次储值
+    charge_data=pd.merge(charge_d_grouped_total,charge_first_d_grouped,on='month')
+    charge_data['first_chargemount']=charge_data['first_chargemount'].apply(lambda x:int(x))
+    charge_data['second_chargemount']=charge_data['charge_mount'].apply(lambda x:int(x))-charge_data['first_chargemount']
+    charge_data=charge_data.rename(columns={'first_chargemount':'首次储值金额','second_chargemount':'再次储值金额'})
+    charge_data_list=['首次储值金额','再次储值金额']
+    double_line2('4%s'%bid, charge_data['month'], charge_data, '月份', '金额(单位:元)', charge_data_list, '每月储值金额的构成')
+    
+    
+    
+    # 6.储值次数和储值金额的分布
+    charge_times_money='''select charge_times,count(uid) as pop_num_charge
+    -- ,sum(charge_real_money) as charge_real_money 
+    from (
+    select uid,count(uid) as charge_times,sum(tcsale)/100 as charge_real_money 
+    from welife_trade_charges
+    where bid=%i
+    and tccreated>=%s and tccreated < %s
+    and tcType=1
+    and tcStatus=1
+    group by uid) a 
+    group by charge_times 
+    order by charge_times desc''' %(bid,p.ftime_s,p.ftime_e)
+    
+    print('6计算储值次数的转化率')
+    charge_times_money_d=wesql(charge_times_money)
+    if charge_times_money_d.empty:
+        charge_times_money_d=pd.DataFrame({'charge_times':0,'pop_num_charge':0},index=[0])
+    # 一商户的储值次数在57次，将小的储值次数全部压缩在一起，所以将次数过滤一下
+    charge_times_money_d=charge_times_money_d[charge_times_money_d['charge_times']<30]
+    # 在sql里面根据次数倒序之后，然后求累加，然后在用pandas排序一次
+    charge_times_money_d['pop_num_charge_cum']=charge_times_money_d['pop_num_charge'].cumsum()
+    charge_times_money_d=charge_times_money_d.sort_values(by='charge_times')
+    # 将“次”加在储值次数上
+    charge_times_money_d['charge_times_ci']=charge_times_money_d['charge_times'].apply(lambda x:str(x))+'次'
+    # 用窗口函数求出上一行比上下一行，但是此处的rolling函数只能将算出来的值贴在第二行上，所以计算出来的转化率只能从第二次开始画，看图你就明白了
+    charge_times_money_d['rate']=charge_times_money_d['pop_num_charge_cum'].rolling(2).apply(lambda x:x.min()/x.max())
+    charge_times_money_d['rate']=charge_times_money_d['rate'].apply(lambda x:float('%.2f' %x))
+    # w=pd.ExcelWriter('储值人数.xlsx')
+    # charge_times_money_d.to_excel(w,'data')
+    # w.save()
+    # print(charge_times_money_d)
+    fig=plt.figure('9%s'%bid,figsize=(10,6))
+    
+    ax2=fig.add_subplot(111)
+    
+    
+    ax2.bar(charge_times_money_d['charge_times'],charge_times_money_d['pop_num_charge_cum'])
+    ax2.set_ylabel('储值人数',fontsize=13)
+    
+    for a,b in zip(charge_times_money_d['charge_times'],charge_times_money_d['pop_num_charge_cum']):
+        plt.text(a,b,'{:,}'.format(b),ha='center',va='bottom',fontsize=13)
+    # 之所以用charge_times来画x是因为这样可以排序，然后用带有‘次’的标签替换掉
+    plt.xticks(charge_times_money_d['charge_times'],charge_times_money_d['charge_times_ci'])
+    # 画出双坐标
+    ax1=ax2.twinx()
+    
+    ax1.plot(charge_times_money_d['charge_times'],charge_times_money_d['rate'],'r-o')
+    ax1.set_ylabel('储值次数转化率')
+    for a,b in zip(charge_times_money_d['charge_times'],charge_times_money_d['rate']):
+        plt.text(a,b,'%.0f%%' %(b*100),ha='center',va='bottom',fontsize=12)
+    ax1.set_title("储值人数和储值次数转化率")    
+    ax1.set_xlabel('储值次数')
+    
+    plt.savefig('9%s储值次数的转化率'%bid,dpi=200)
+    
+    
+    
+    # 7储值档的分布
+    charge_dist='''select charge_money as charge_line,count(uid) as charge_pop
+    from(select uid ,tcsale/100 as charge_money,date_format(tccreated,'%%Y%%m%%d') as charge_time
+    from welife_trade_charges
+    where tccreated>=%s and tccreated < %s and bid=%i
+    and tcType=1
+    and tcStatus=1) a
+    group by charge_money
+    order by count(uid) desc 
+    limit 5''' %(p.ftime_s,p.ftime_e,bid)
+    print('7计算储值人数和金额的比')
+    charge_dist_d=wesql(charge_dist)
+    if charge_dist_d.empty:
+        charge_dist_d=pd.DataFrame({'charge_line':0,'charge_pop':0},index=[0])
+    charge_dist_d['charge_money']=charge_dist_d['charge_line']*charge_dist_d['charge_pop']
+    charge_dist_d['charge_line']=charge_dist_d['charge_line'].apply(lambda x :str(int(x)))
+    charge_dist_d['charge_line']=charge_dist_d['charge_line']+"档"
+    charge_dist_d['charge_money']=charge_dist_d['charge_money'].apply(lambda x:int(x))
+    charge_dist_d['total_pop']=charge_dist_d['charge_pop'].sum()
+    charge_dist_d['total_money']=charge_dist_d['charge_money'].sum()
+    charge_dist_d['pop_rate']=charge_dist_d['charge_pop']/charge_dist_d['total_pop']
+    # charge_dist_d['pop_rate']=charge_dist_d['pop_rate'].apply(lambda x:'%.2f' %x)
+    charge_dist_d['pop_rate']=charge_dist_d['pop_rate'].apply(lambda x:float(x))
+    
+    charge_dist_d['money_rate']=charge_dist_d['charge_money']/charge_dist_d['total_money']
+    # charge_dist_d['money_rate']=charge_dist_d['money_rate'].apply(lambda x:'%.2f' %x)
+    charge_dist_d['money_rate_m']=charge_dist_d['money_rate'].apply(lambda x:-float(x))
+    
+    # charge_dist_d储值人数占比低于0.0%的也会画出来，这儿稍微过滤一下
+    # print(charge_dist_d)
+    charge_dist_d=charge_dist_d[charge_dist_d['money_rate']>0.01]
+    charge_dist_d=charge_dist_d[charge_dist_d['pop_rate']>0.01]
+    
+    # charge_dist_d=charge_dist_d[charge_dist_d['money_rate_m']>0.05]
+    
+    if not charge_dist_d.empty:
+        fig=plt.figure('6%s'%bid,figsize=(10,6))
+        X=np.arange(charge_dist_d['charge_line'].count())
+        Xlabels=charge_dist_d['charge_line']
+        plt.barh(X,charge_dist_d['pop_rate'])
+        
+        for a,b in enumerate(charge_dist_d['pop_rate']):
+            plt.text(b,a,'%.1f%%' %(b*100),ha='left',va='bottom',fontsize=13)
+            
+        plt.barh(X,charge_dist_d['money_rate_m'])
+        for a,b in enumerate(charge_dist_d['money_rate_m']):
+            plt.text(b,a,'%.1f%%' %(-b*100),ha='right',va='bottom',fontsize=13)
+            
+        plt.yticks(X,Xlabels)
+        plt.xticks(())
+        plt.legend(['储值人数占比','储值金额占比'])
+        plt.title('各储值档位上会员的储值情况')
+        
+        plt.savefig('10%s储值档的人数和金额分布'%bid,dpi=200)
+    else:
+        fig=plt.figure(6,figsize=(10,6))
+        
+        plt.savefig('10%s储值档的人数和金额分布'%bid,dpi=200)
+    
+    # 8.储值支付方式
+    charge_type='''select 
+    round(100*count(case when tcChargeType=1 then uid end)/count(uid),2) '现金',
+    round(100*count(case when tcChargeType=2 then uid end)/count(uid),2) '银行卡',
+    round(100*count(case when tcChargeType=4 then uid end)/count(uid),2) '支付宝',
+    round(100*count(case when tcChargeType=5 then uid end)/count(uid),2) '店内微信',
+    round(100*count(case when tcChargeType=6 then uid end)/count(uid),2) '手工调账'
+    from welife_trade_charges 
+    where bid=%i
+    and tccreated>=%s and tccreated < %s
+    and tcType=1
+    and tcStatus=1'''  %(bid,p.ftime_s,p.ftime_e)
+    
+    print('8计算储值的支付方式')
+    charge_type_d=wesql(charge_type)
+    charge_type_d=charge_type_d.T
+    charge_type_d=charge_type_d.reset_index()
+    charge_type_d.rename(columns={'index':'type',0:'rate'},inplace=True)
+    charge_type_d=charge_type_d.sort_values(by='rate')
+    # 2%以下的几个标签经常产生覆盖，所以先把他们去除掉
+    charge_type_d=charge_type_d[charge_type_d['rate']>0.02]
+    fig=plt.figure('9%s'%bid,figsize=(10,6))
+    plt.pie(charge_type_d['rate'],labels=charge_type_d['type'],autopct='%1.1f%%')
+    plt.axis('equal')
+    plt.title('储值支付方式占比')
+    
+    plt.savefig('11%s储值支付方式占比'%bid)
+    
+    
+    # 之前用的是新增排前3的等级来计算消费能力，结果有些新增在前的反而并没有消费记录，
+    # 明显的就是普通会员，所以现在用消费人数在前3的等级来计算消费能力
+    vip_consume_grid='''select grid as ccid,count(uid) as num
+    from dprpt_welife_trade_consume_detail
+    where ftime>%s and ftime<%s and bid=%i and tctype=2
+    group by grid
+    order by num desc 
+    limit 3''' %(p.ftime_s,p.ftime_e,bid)
+    vip_consume_grid=dwsql(vip_consume_grid)
+    
+    
+    # 这儿要注意的是，在注册表里面的普通会员的等级可能会是0，而消费表里面没有，所以先拿出注册表里面的会员等级的中文名，
+    # 和category里面的匹配，然后拿到完整的，grid,在传入到下面的消费次数和金额分布里面
+    huiyuan_new_create_grid_d=pd.merge(vip_consume_grid,ccname_d,on='ccid')
+    # print(huiyuan_new_create_grid_d)
+    
+    # print(huiyuan_new_create_grid_d)
+    # del huiyuan_new_create_grid_d['ccid_n']
+    ccid=dict(huiyuan_new_create_grid_d[['ccid','grid']].values)
+    print('9计算消费次数和金额的分布')
+    for ci, cn in ccid.items():
+    
+    #     消费次数的分布
+        consume_num_distribute='''select 
+        count(case when tctotalfee/100>0 and tctotalfee/100<=50 then uid end) '0-50',
+        count(case when tctotalfee/100>50 and tctotalfee/100<=100 then uid end) '50-100',
+        count(case when tctotalfee/100>100 and tctotalfee/100<=150 then uid end) '100-150',
+        count(case when tctotalfee/100>150 and tctotalfee/100<=200 then uid end) '150-200',
+        count(case when tctotalfee/100>200 and tctotalfee/100<=250 then uid end) '200-250',
+        count(case when tctotalfee/100>250 and tctotalfee/100<=300 then uid end) '250-300',
+        count(case when tctotalfee/100>300 and tctotalfee/100<=350 then uid end) '300-350',
+        count(case when tctotalfee/100>350 and tctotalfee/100<=400 then uid end) '350-400',
+        count(case when tctotalfee/100>400 and tctotalfee/100<=450 then uid end) '400-450',
+        count(case when tctotalfee/100>450 and tctotalfee/100<=500 then uid end) '450-500',
+        count(case when tctotalfee/100>500 and tctotalfee/100<=550 then uid end) '500-550',
+        count(case when tctotalfee/100>550 and tctotalfee/100<=600 then uid end) '550-600',
+        count(case when tctotalfee/100>600 and tctotalfee/100<=650 then uid end) '600-650',
+        count(case when tctotalfee/100>650 and tctotalfee/100<=700 then uid end) '650-700',
+        count(case when tctotalfee/100>700 and tctotalfee/100<=750 then uid end) '700-750',
+        count(case when tctotalfee/100>750 and tctotalfee/100<=800 then uid end) '750-800',
+        count(case when tctotalfee/100>800 and tctotalfee/100<=850 then uid end) '800-850',
+        count(case when tctotalfee/100>850 and tctotalfee/100<=900 then uid end) '850-900',
+        count(case when tctotalfee/100>900 and tctotalfee/100<=950 then uid end) '900-950',
+        count(case when tctotalfee/100>950 and tctotalfee/100<=1000 then uid end) '950-1000',
+        count(case when tctotalfee/100>1000 and tctotalfee/100<=1500 then uid end) '1000-1500',
+        count(case when tctotalfee/100>1500 then uid end) '1500-99999'
+        from dprpt_welife_trade_consume_detail      
+        where ftime>=%s
+        and ftime<%s 
+        and bid=%i
+        and grid=%i
+        and tctype=2'''  %(p.ftime_s,p.ftime_e,bid,ci)
+        consume_num_distribute_d=dwsql(consume_num_distribute)
+        consume_num_distribute_d=consume_num_distribute_d.T
+    #     print(consume_num_distribute_d)
+    
+    # 消费金额的分布
+        consume_money_dist='''select 
+        sum(case when tctotalfee/100>0 and tctotalfee/100<=50 then tctotalfee/100 end)/sum(tctotalfee/100) '0-50',
+        sum(case when tctotalfee/100>50 and tctotalfee/100<=100 then tctotalfee/100 end)/sum(tctotalfee/100) '50-100',
+        sum(case when tctotalfee/100>100 and tctotalfee/100<=150 then tctotalfee/100 end)/sum(tctotalfee/100) '100-150',
+        sum(case when tctotalfee/100>150 and tctotalfee/100<=200 then tctotalfee/100 end)/sum(tctotalfee/100) '150-200',
+        sum(case when tctotalfee/100>200 and tctotalfee/100<=250 then tctotalfee/100 end)/sum(tctotalfee/100) '200-250',
+        sum(case when tctotalfee/100>250 and tctotalfee/100<=300 then tctotalfee/100 end)/sum(tctotalfee/100) '250-300',
+        sum(case when tctotalfee/100>300 and tctotalfee/100<=350 then tctotalfee/100 end)/sum(tctotalfee/100) '300-350',
+        sum(case when tctotalfee/100>350 and tctotalfee/100<=400 then tctotalfee/100 end)/sum(tctotalfee/100) '350-400',
+        sum(case when tctotalfee/100>400 and tctotalfee/100<=450 then tctotalfee/100 end)/sum(tctotalfee/100) '400-450',
+        sum(case when tctotalfee/100>450 and tctotalfee/100<=500 then tctotalfee/100 end)/sum(tctotalfee/100) '450-500',
+        sum(case when tctotalfee/100>500 and tctotalfee/100<=550 then tctotalfee/100 end)/sum(tctotalfee/100) '500-550',
+        sum(case when tctotalfee/100>550 and tctotalfee/100<=600 then tctotalfee/100 end)/sum(tctotalfee/100) '550-600',
+        sum(case when tctotalfee/100>600 and tctotalfee/100<=650 then tctotalfee/100 end)/sum(tctotalfee/100) '600-650',
+        sum(case when tctotalfee/100>650 and tctotalfee/100<=700 then tctotalfee/100 end)/sum(tctotalfee/100) '650-700',
+        sum(case when tctotalfee/100>700 and tctotalfee/100<=750 then tctotalfee/100 end)/sum(tctotalfee/100) '700-750',
+        sum(case when tctotalfee/100>750 and tctotalfee/100<=800 then tctotalfee/100 end)/sum(tctotalfee/100) '750-800',
+        sum(case when tctotalfee/100>800 and tctotalfee/100<=850 then tctotalfee/100 end)/sum(tctotalfee/100) '800-850',
+        sum(case when tctotalfee/100>850 and tctotalfee/100<=900 then tctotalfee/100 end)/sum(tctotalfee/100) '850-900',
+        sum(case when tctotalfee/100>900 and tctotalfee/100<=950 then tctotalfee/100 end)/sum(tctotalfee/100) '900-950',
+        sum(case when tctotalfee/100>950 and tctotalfee/100<=1000 then tctotalfee/100 end)/sum(tctotalfee/100) '950-1000',
+        sum(case when tctotalfee/100>1000 and tctotalfee/100<=1500 then tctotalfee/100 end)/sum(tctotalfee/100) '1000-1500',
+        sum(case when tctotalfee/100>1500 then  tctotalfee/100 end)/sum(tctotalfee/100) '1500-99999'
+        from dprpt_welife_trade_consume_detail
+        where ftime>=%s
+        and ftime<%s
+        and bid=%i
+        and grid=%i
+        and tctype=2 ''' %(p.ftime_s,p.ftime_e,bid,ci)
+        
+        consume_money_dist=dwsql(consume_money_dist)
+        consume_money_dist=consume_money_dist.T
+    #     print(consume_money_dist)
+        
+    #     将消费次数和消费区间合并
+        re2=pd.merge(consume_num_distribute_d,consume_money_dist,left_index=True,right_index=True)
+        re2=re2.reset_index()
+    #     更改数据的列名
+        re2.rename(columns={'index':'区间','0_x':'消费人数','0_y':'消费金额占比'},inplace=True)
+    #     要是有等于0的行在里面的话，消费金额占比进行apply时由于nonetype就无法通过
+        re2=re2[re2['消费人数']>0]
+    #     将消费金额占比保留两位小数
+        re2['消费金额占比']=re2['消费金额占比'].apply(lambda x:float('%.2f' %x))
+        d_s=[]
+    #     这儿有个小问题就是50-100这个区间很喜欢跑到中间，所以人为的将它分割之后，根据前面的数据排列，如50-100就取出50
+        for i in re2['区间']:
+            d=int(i.split('-')[0])
+            d_s.append(d)
+        re2['inteval']=d_s
+        re3=re2.sort_values(by='inteval')
+    #     print(re3)
+    #     制作X轴和X轴的标签
+        la=np.arange(re3['区间'].count())
+        xla=re3['区间']
+        
+        
+    #     这儿之所以传入ci,是为了防止将图画在同一个fig上
+        fig=plt.figure('%i' %ci,figsize=(9,6))
+        ax11=fig.add_subplot(111)
+        
+    #     柱状图bar_p后面不需要,line_p的后面才需要
+        bar_p=ax11.bar(la,re3['消费金额占比'])
+        for a,b in zip(la,re3['消费金额占比']):
+            if  a%2!=0:
+                plt.text(a,b+0.004,'%.2f%%'%(b*100),ha='center',va='bottom',fontsize=13)
+        
+        ax11.set_ylabel('消费金额占比')
+    #     ax11.set_xlabel('消费区间')
+        ax11.set_title('%s的消费能力' %cn)
+    #     ax11.legend('消费金额占比')
+        plt.xticks(la,xla,size='small',rotation=45)
+        
+    #     双坐标抽
+        ax22=ax11.twinx()
+        line_p,=ax22.plot(la,re3['消费人数'],'r-o',label='消费人数')
+        for a,b in zip(la,re3['消费人数']):
+            if a%2==0:
+                plt.text(a,b,'{:,}'.format(b),ha='center',va='bottom',fontsize=13)        
+        ax22.set_ylabel('消费人数')
+    #     ax22.legend(['消费人数'])
+        plt.legend([bar_p,line_p],['消费金额占比','消费人数'])
+        plt.title('%s的消费能力' %cn)
+        
+        plt.savefig('12_消费能力%i' %(ci))
+      
+    
+    # 11.储值会员续充的时间间隔
+    xuchong_time='''select uid,charge_time,
+    @x:=if(@user_uid=uid,@x+1,1) as rank,
+    @user_uid:=uid as dummy
+    from 
+    (select a1.uid,date_format(tcCreated,'%%Y%%m%%d') as charge_time
+    from ( select uid,tcCreated from welife_trade_charges
+    where bid=%i  and tcType=1 and tcStatus=1) a1 
+    inner join (select uid from welife_user_savings where bid=%i and usChargeCount>1) a2 on a1.uid=a2.uid ) t1,
+    (select @x:=0,@y:=0,@user_uid:=null) t2 '''  %(bid,bid)
+    xuchong_time_d=wesql(xuchong_time)
+    if len(xuchong_time_d)>10 : #如果len很小的话，下面也会报错
+    # 首充时间
+        first_charge_time=xuchong_time_d[xuchong_time_d['rank']==1]
+        # 续充时间
+        second_charge_time=xuchong_time_d[xuchong_time_d['rank']==2]
+        
+        # 第三次储值时间，本打算求出2次和3次储值的时间间隔，发现目前还没有必要细致到那个程度，先留着
+        # third_charge_time=xuchong_time_d[xuchong_time_d['rank']==3]
+        
+        # 合并第一次储值和第二次储值时间
+        first_charge_time_and_second_charge_time=pd.merge(first_charge_time,second_charge_time,on='uid')
+        first_charge_time_and_second_charge_time['ftime_1']=first_charge_time_and_second_charge_time['charge_time_x'].apply(lambda x:dtime.strptime(str(x),"%Y%m%d"))
+        first_charge_time_and_second_charge_time['ftime_2']=first_charge_time_and_second_charge_time['charge_time_y'].apply(lambda x:dtime.strptime(str(x),"%Y%m%d"))
+        
+        
+        
+        first_charge_time_and_second_charge_time['interval']=first_charge_time_and_second_charge_time['ftime_2']-first_charge_time_and_second_charge_time['ftime_1']
+        # 两次充值的时间差有负数，两次充值的时间会互换，所以用了np.abs求绝对值np.abs(x.days))
+        first_charge_time_and_second_charge_time['days']=first_charge_time_and_second_charge_time['interval'].apply(lambda x:np.abs(x.days))
+        a_max=first_charge_time_and_second_charge_time['days'].max()
+       
+        a_min=first_charge_time_and_second_charge_time['days'].min()
+    #     print(a_min); print(a_max)
+    #     cut_points=[a_min,30,60,90,120,a_max]
+    #     mylabels=['%s-30天'%a_min,'31-60天','61-90天','91-120天','121-%s天'%a_max]
+    
+    #     cut_points=[a_min,a_max]
+    #     mylabels=['%s_%s天' %(a_min,a_max)]
+        
+        cut_points=[a_min,a_max/4,a_max/2,a_max]
+        mylabels=['%s_%s天' %(a_min,int(a_max/4)),'%s-%s天'%(int(a_max/4),int(a_max/2)),'%s_%s天'%(int(a_max/2),a_max)]
+    #     print(first_charge_time_and_second_charge_time['days'])
+        first_charge_time_and_second_charge_time['panduan']=pd.cut(first_charge_time_and_second_charge_time['days'],cut_points,labels=mylabels)
+        first_and_second_charge_mean_day=first_charge_time_and_second_charge_time['days'].mean()
+        charge_interval_pivot=pd.pivot_table(first_charge_time_and_second_charge_time,index='panduan',values='uid',aggfunc=len,fill_value=0)
+        
+        fig=plt.figure('%s40'%bid,figsize=(10,6))
+        plt.pie(charge_interval_pivot['uid'],labels=charge_interval_pivot.index,autopct='%1.1f%%')
+        plt.axis('equal')
+        plt.title('首次储值与再次储值间隔时间人数分布 \n \n 首次和再次储值平均间隔%s天'%int(first_and_second_charge_mean_day))
+        plt.savefig('40%s首次储值与再次储值间隔时间人数分布'%bid)
+    else:
+        fig=plt.figure(40,figsize=(10,6))
+        plt.bar(0,0)
+        plt.title('需要删除')
+        plt.savefig('40%s首次储值与再次储值间隔时间人数分布'%bid)
+    
+    
+    # ================markethaha=======================
+    
+    
+    
+    
+    print('=========================')
+    print('market')
+    print('=========================')
+    
+    
+    
+    
+    
+    
+    # 1.优惠券营销活动
+    coupon_use='''select aid '编号',
+    couponid '券ID',
+    activityname '活动名称',
+    couponname '券名称',
+    sum(couponsendsum) '发券量',
+    sum(couponusedsum) '使用券量',
+    sum(tradecash - cancelcash)/100 '拉动现金消费',
+    sum(camount * couponusedsum)/100 '拉动券消费',
+    sum(tradeprepay - canceltradepv)/100 '拉动储值消费',
+    concat(round(100*sum(couponusedsum)/sum(couponsendsum),2),'%%') '使用率'
+    from dprpt_welife_activity_log 
+    where bid=%i
+    and ftime>=%s
+    and ftime<%s 
+    group by activityname,couponname''' %(bid,p.ftime_s,p.ftime_e)
+    print('1计算营销收入')
+    coupon_use_d=dwsql(coupon_use)
+    
+    coupon_use_d=coupon_use_d.fillna(0)
+    # print(coupon_use_d.head())
+    if coupon_use_d.empty or coupon_use_d['发券量'].max()<=0:
+        fig=plt.figure(29)
+        plt.bar(0,0)
+        plt.legend('需要删除')
+        
+        plt.savefig('29%s发券量靠前的券使用率'%bid)
+        
+        fig=plt.figure(27)
+        plt.bar(0,0)
+        plt.legend('需要删除')
+        
+        plt.savefig('27%s营销收入占总会员收入的比'%bid)
+        
+        fig=plt.figure(28)
+        plt.bar(0,0)
+        plt.legend('需要删除')
+        
+        plt.savefig('28%s收益最高3张券带动营业额占比'%bid)
+        
+        fig=plt.figure(42)
+        plt.bar(0,0)
+        plt.legend('需要删除')
+        
+        plt.savefig('42%s除开卡礼外收益较高券带动营业额占比'%bid)
+        
+    else:
+      #如果没有营销活动的话，就在下面插入一张空的图片，然后手动删除
+        coupon_use_d['拉动总消费']=coupon_use_d['拉动现金消费']+coupon_use_d['拉动券消费']+coupon_use_d['拉动储值消费']
+        # consume_sum求和之后变成一个数据框
+        consume_sum=pd.DataFrame({'拉动总消费':coupon_use_d['拉动总消费'].sum()},index=[0])
+        # print(consume_sum)
+        # 想要计算营销收入占总营业额的比重，所以还要知道总的营业额
+        consume_money=''' select sum(tctotalfee/100) as 消费金额
+        from dprpt_welife_trade_consume_detail 
+        where bid=%i and tctype=2 and  ftime>=%s and ftime<%s  ''' %(bid,p.ftime_s,p.ftime_e)
+        consume_money_d=dwsql(consume_money)
+        # print('consume_money_d',consume_money_d)
+        
+        print('1.1计算营销收入占总收入的比')
+        market_re=pd.concat([consume_sum,consume_money_d],axis=1)
+        market_re['非营销拉动']=market_re['消费金额']-market_re['拉动总消费']
+        market_re2=market_re[['拉动总消费','非营销拉动']].T.reset_index().rename(columns={'index':'type',0:'value'})
+        # print(market_re2)
+        bing('27%s'%bid,market_re2['value'],market_re2['type'],'营销收入占总会员收入的比')
+        
+        print('1.2各券带来的收入')
+        # 从券的角度来看各张券带来的收入占比
+        coupon_use_d_coupon=pd.pivot_table(coupon_use_d,index=['券名称'],values=['发券量','使用券量','拉动总消费'],aggfunc=np.sum)
+        coupon_use_d_coupon=coupon_use_d_coupon.reset_index()
+        # 根据拉动的总消费排序，然后取出值最大的前5项
+        # 有些垃圾券的数据为0，所以要剔除，否则没法apply(lambda x:int(x))
+        coupon_use_d_coupon=coupon_use_d_coupon[coupon_use_d_coupon['拉动总消费']>0]
+        coupon_use_d_coupon['拉动总消费']=coupon_use_d_coupon['拉动总消费'].apply(lambda x:int(x))
+        coupon_use_d_coupon_1=coupon_use_d_coupon.sort_values(by='拉动总消费',ascending=False)
+        
+        coupon_use_d_coupon_1_top_5=coupon_use_d_coupon_1.head(3)
+        # print(coupon_use_d_coupon_1_top_5)
+        bing('28%s'%bid,coupon_use_d_coupon_1_top_5['拉动总消费'],coupon_use_d_coupon_1_top_5['券名称'],'收益最高3张券带动营业额占比')
+        
+        # 通常开卡礼所占的比例过高，现在把开卡礼拿掉之后，再来看个券的占比，默认开卡礼带来的消费金额最多，所以拿掉最大值之后剩下的就是排除开卡里之后的
+        coupon_use_d_coupon_1_top_5_no_kaikali=coupon_use_d_coupon_1[coupon_use_d_coupon_1['拉动总消费']<coupon_use_d_coupon_1['拉动总消费'].max()]
+        coupon_use_d_coupon_1_top_5_no_kaikali_top_5=coupon_use_d_coupon_1_top_5_no_kaikali.head(6)
+        # print(coupon_use_d_coupon_1_top_5_no_kaikali_top_5.head())
+        bing('42%s'%bid,coupon_use_d_coupon_1_top_5_no_kaikali_top_5['拉动总消费'],coupon_use_d_coupon_1_top_5_no_kaikali_top_5['券名称'],'除开卡礼外收益较高券带动营业额占比')
+        
+        
+        
+        
+        
+        
+        
+        print('1.3发券量最高的10张券的使用情况')
+        # 根据发券量排序，然后取出值最大的前10项
+        coupon_use_d_coupon_2=coupon_use_d_coupon.sort_values(by='发券量',ascending=False)
+        if len(coupon_use_d_coupon_2)>=10:
+            coupon_use_d_coupon_2_top_10=coupon_use_d_coupon_2.head(10)
+        else:
+            coupon_use_d_coupon_2_top_10=coupon_use_d_coupon_2.head(5)
+        
+        coupon_use_d_coupon_2_top_10_new=coupon_use_d_coupon_2_top_10.copy()
+        # 即使选择了前5依然有发券量为0的存在，所以直接筛选大于0的
+        coupon_use_d_coupon_2_top_10_new=coupon_use_d_coupon_2_top_10_new[coupon_use_d_coupon_2_top_10_new['发券量']>0]
+        coupon_use_d_coupon_2_top_10_new['使用率']=coupon_use_d_coupon_2_top_10_new['使用券量']/coupon_use_d_coupon_2_top_10_new['发券量']
+        
+        # 在xuanf2里面的两个柱子之间的量纲,用size 表示，这个地方求的时候经常decimal和float的错误，所以先将使用率扩大100倍之后
+        # 再和发券量相比，这样做整数之间的除法
+        # print(coupon_use_d_coupon_2_top_10_new)
+        # print('使用率均值',coupon_use_d_coupon_2_top_10_new['使用率'].min())
+        
+        
+        
+        if coupon_use_d_coupon_2_top_10_new['使用率'].min()>0.01:
+            coupon_use_d_coupon_2_top_10_new['使用率n']=coupon_use_d_coupon_2_top_10_new['使用率'].apply(lambda x:int(x*100))
+            a=coupon_use_d_coupon_2_top_10_new['发券量']/coupon_use_d_coupon_2_top_10_new['使用率n']
+        # b 就是xuanf2里面的size,但是如果将b扩大到100倍的话，画出来的不好看，所以暂时扩大10倍
+            b=int(a.mean())*10
+        else:
+            coupon_use_d_coupon_2_top_10_new['使用率n']=coupon_use_d_coupon_2_top_10_new['使用率'].apply(lambda x:int(x*1000))
+            coupon_use_d_coupon_2_top_10_new=coupon_use_d_coupon_2_top_10_new[coupon_use_d_coupon_2_top_10_new['使用率n']>0]
+            a=coupon_use_d_coupon_2_top_10_new['发券量']/coupon_use_d_coupon_2_top_10_new['使用率n']
+        # b 就是xuanf2里面的size,但是如果将b扩大到100倍的话，画出来的不好看，所以暂时扩大10倍
+        if a.empty:
+            b=100
+        else:
+            b=int(a.mean())*100
+            
+        if coupon_use_d_coupon_2_top_10_new.empty:
+            fig=plt.figure(29)
+            plt.bar(0,0)
+            plt.title('需要删除')
+            
+            plt.savefig('29%s发券量靠前的券使用率'%bid)
+        else:
+            xuanf2('29%s'%bid, coupon_use_d_coupon_2_top_10_new['券名称'], coupon_use_d_coupon_2_top_10_new['发券量'],
+                   coupon_use_d_coupon_2_top_10_new['使用率'], b, '发券量靠前的券使用率', '发券量', '使用率')
+        
+            
+    
+    
+    # 2.积分营销
+    # 积分的使用人数(这里是依照grid分组求的，做图时候可以只算全部的使用率)
+    point_use_grid='''select count(distinct(case when a.sendpoint > 0 then a.uid end)) '积分发放人数',
+    count(distinct(case when pointpay > 0  then a.uid end)) '积分使用人数'
+    -- ,concat(round(100*count(distinct(case when a.pointpay > 0 then a.uid end))/count(distinct(a.uid)),2),'%%') '使用积分抵扣占比'
+    from dprpt_welife_trade_consume_detail a
+    where bid=%i
+    and tctype=2 
+    and ftime>=%s
+    and ftime<%s ''' %(bid,p.ftime_s,p.ftime_e)
+    print('2.积分使用人数')
+    point_use_grid_d=dwsql(point_use_grid)
+    point_use_grid_d=point_use_grid_d.T.reset_index()
+    # print(point_use_grid_d)
+    
+    
+    
+    #积分的使用数量
+    point_use_number='''select  
+    sum(case when t.tctradetype = 1 then t.tccredit end) 发放积分,
+    sum(case when t.tctradetype = 2 then t.tccredit end) 使用积分
+    -- concat(round(100*sum(case when t.tctradetype = 2 then t.tccredit end)/sum(case when t.tctradetype = 1 then t.tccredit end),2),'%%') '积分消耗占比'
+    from welife_trade_credit t
+    where bid=%i
+    and tcCreated >= %s
+    and tcCreated < %s ''' %(bid,p.ftime_s,p.ftime_e)
+    print('3.积分使用数量')
+    point_use_number_d=wesql(point_use_number)
+    point_use_number_d=point_use_number_d.T.reset_index()
+    
+    # 有时积分的使用数量为0，所以还要替换一下
+    point_use_number_d[0]=point_use_number_d[0].where(point_use_number_d[0].notnull(),0)
+    
+    fig=plt.figure('30%s'%bid,figsize=(10,6),dpi=200)
+    ax1=plt.subplot(121)
+    ax1.bar(point_use_grid_d['index'],point_use_grid_d[0])
+    autolabel(point_use_grid_d['index'],point_use_grid_d[0],12)
+    plt.title('积分发放和使用人数')
+    ax=plt.subplot(122)
+    ax3=ax.twinx()
+    ax3.bar(point_use_number_d['index'],point_use_number_d[0])
+    autolabel(point_use_number_d['index'],point_use_number_d[0],12)
+    ax.set_yticks(())
+    plt.title('积分发放和使用数量')
+    
+    plt.savefig('31%s积分使用人数和数量'%bid)
+    
+    
+    
+    # 3.积分的余额分布
+    #-------------26.积分余额分布
+    point_saving='''select 
+    count(case when utcSaving=1 then uid end) '1',
+    count(case when utcSaving=2 then uid end) '2',
+    count(case when utcSaving=3 then uid end) '3',
+    count(case when utcSaving=4 then uid end) '4',
+    count(case when utcSaving=5 then uid end) '5',
+    count(case when utcSaving=6 then uid end) '6',
+    count(case when utcSaving=7 then uid end) '7',
+    count(case when utcSaving=8 then uid end) '8',
+    count(case when utcSaving=9 then uid end) '9',
+    count(case when utcSaving=10 then uid end) '10',
+    count(case when utcSaving=11 then uid end) '11',
+    count(case when utcSaving=12 then uid end) '12',
+    count(case when utcSaving=13 then uid end) '13',
+    count(case when utcSaving=14 then uid end) '14',
+    count(case when utcSaving=15 then uid end) '15',
+    count(case when utcSaving=16 then uid end) '16',
+    count(case when utcSaving=17 then uid end) '17',
+    count(case when utcSaving=18 then uid end) '18',
+    count(case when utcSaving=19 then uid end) '19',
+    count(case when utcSaving=20 then uid end) '20',
+    count(case when utcSaving>20 and utcSaving<=30 then uid end) '21-30',
+    count(case when utcSaving>30 and utcSaving<=40 then uid end) '31-40',
+    count(case when utcSaving>40 and utcSaving<=50 then uid end) '41-50',
+    count(case when utcSaving>50 and utcSaving<=100 then uid end) '51-100',
+    count(case when utcSaving>100 and utcSaving<=200 then uid end) '101-200',
+    count(case when utcSaving>200 and utcSaving<=300 then uid end) '201-300',
+    count(case when utcSaving>300 and utcSaving<=400 then uid end) '301-400',
+    count(case when utcSaving>400 and utcSaving<=500 then uid end) '401-500',
+    count(case when utcSaving>500 then uid end) '501-9999'
+    from 
+    (select uid,sum(utcSaving) utcSaving
+    from welife_user_trade_credit
+    where bid=%i
+    and utcStatus in (1,2)
+    group by uid) t''' %bid
+    print('4.积分余额分布')
+    point_saving_d=wesql(point_saving)
+    point_saving_d=point_saving_d.T.reset_index()
+    # 因为里面有个‘501以上’，这个选项让后面的排序很难进行，所以直接将余额小于0的过滤掉，估计也很少有人的积分余额能够高于500
+    point_saving_d=point_saving_d[point_saving_d[0]>0]
+    # print(point_saving_d)
+    
+    d_n=[]
+    # 仿照消费能力里面的，将’200-300‘这样的字段提取出200，然后排序
+    for i in point_saving_d['index']:
+    #     之所以要大于1是因为，即使没有‘-’也可以找出一个值
+        if i.find('-')>1:
+            d=i.split('-')[0]
+            d_n.append(d)
+        else:
+            d_n.append(i)
+    d_n2=[int(x) for x in d_n]   
+    # 将新取出来的列，合并到原有的数据框里面
+    point_saving_d['new']=d_n2
+    point_saving_d_sort=point_saving_d.sort_values(by='new')
+    # print(point_saving_d_sort) 
+    # 开始画图  
+    index_2=np.arange(len(point_saving_d_sort))   
+    
+    
+    fig=plt.figure('31%s'%bid,figsize=(10,6),dpi=200)
+    plt.bar(index_2,point_saving_d_sort[0])
+    for a,b in zip(index_2,point_saving_d_sort[0]):
+        if a%2==0:
+            plt.text(a,b,'{0}'.format(int(b)),ha='center',va='baseline',fontsize=10)
+    plt.xticks(index_2,point_saving_d_sort['index'],fontsize=8,rotation=35)
+    plt.ylabel('人数')
+    plt.title('积分余额的分布')
+    
+    plt.savefig('31%s积分余额的分布'%bid)
+    
+    
+    
+    # 4.是否使用积分的差异
+    point_used='''select 
+    sum(case when sumpoint>0 then sumfee end)/count(case when sumpoint>0 then uid end) '人均_使用',
+    sum(case when sumpoint>0 then sumfee end)/sum(case when sumpoint>0 then trade_num end) '桌均_使用',
+    sum(case when sumpoint>0 then trade_num end)/count(case when sumpoint>0 then uid end) '均次_使用',
+    sum(case when sumpoint=0 and sumsend>0 then sumfee end)/count(case when sumpoint=0 and sumsend>0 then uid end) '人均_未用',
+    sum(case when sumpoint=0 and sumsend>0 then sumfee end)/sum(case when sumpoint=0 and sumsend>0 then trade_num end) '桌均_未用',
+    sum(case when sumpoint=0 and sumsend>0 then trade_num end)/count(case when sumpoint=0 and sumsend>0 then uid end) '均次_未用'
+    from (select uid,sum(pointpay) sumpoint,count(uid) trade_num,sum(tctotalfee/100) sumfee,sum(sendpoint) sumsend 
+    from dprpt_welife_trade_consume_detail 
+    where bid=%s and tctype=2 and ftime>=%s and ftime<=%s
+    group by uid) a 
+    where trade_num>=2'''  %(bid,p.ftime_s,p.ftime_e)
+    point_used_d=dwsql(point_used)
+    
+    point_used_d=point_used_d.fillna(0)
+    
+    point_used_d_t=point_used_d.T
+    point_d1=pd.DataFrame(point_used_d_t.ix[['人均_使用','人均_未用'],0])
+    point_d2=pd.DataFrame(point_used_d_t.ix[['桌均_使用','桌均_未用'],0])
+    point_d3=pd.DataFrame(point_used_d_t.ix[['均次_使用','均次_未用'],0])
+    
+    
+    
+    
+    fig=plt.figure('35%s'%bid,figsize=(10,6),dpi=200)
+    
+    
+    # ax1=fig.add_subplot(131)
+    # ax1.bar(point_d1.index,point_d1[0])
+    # for a,b in zip(point_d1.index,point_d1[0]):
+    #     plt.text(a,b,'{:,}'.format(int(b)),ha='center',va='baseline',fontsize=11)
+    
+    
+    # ax2=fig.add_subplot(132)
+    ax2=fig.add_subplot(121)
+    
+    ax2.bar(point_d2.index,point_d2[0])
+    for a,b in zip(point_d2.index,point_d2[0]):
+        plt.text(a,b,'{:,}'.format(int(b)),ha='center',va='baseline',fontsize=11)
+    plt.title('是否使用积分的差异')
+    plt.yticks(())
+    
+    # ax3=fig.add_subplot(133)
+    ax3=fig.add_subplot(122)
+    
+    ax3.bar(point_d3.index,point_d3[0])
+    for a,b in zip(point_d3.index,point_d3[0]):
+        plt.text(a,b,'{:,}'.format(int(b)),ha='center',va='baseline',fontsize=11)
+    
+    plt.savefig('35%s是否使用积分的差异'%bid)
+    
+    # ==================userinfohaha================
+    
+    print('=========================')
+    print('user_info')
+    print('=========================')  
+    
+    
+    #1性别比例
+    gender_pro='''select  grid,sum(male) as '男',sum(female) as '女'
+    from (select ifnull(r.ccname,'%s') 'grid',
+    count(case when u.uGender=1 then u.uid end) as  'male', 
+    count(case when u.uGender=2 then u.uid end) as  'female'
+    from welife%s.welife_users%s u 
+    left join welife_card_categories r on u.ccid=r.ccid  
+    where  u.bid=%i and u.uregistered>=%s and u.uregistered < %s 
+    and u.uCardStatus=2
+    -- and qrid='o14709796652953'  
+    -- and u.ccid in (3004945,3007787,3009255,3007788,3007789)
+    group by r.ccname) a
+    group by grid''' %(myname,dbs,tbs,bid,p.ftime_s,p.ftime_e)
+    print('1.性别比例')
+    gender_pro_d=wesql(gender_pro)
+    gender_pro_d['sum']=gender_pro_d['男']+gender_pro_d['女']
+    # 有sum之后为0的情况，这样不能相除，所以进行筛选
+    gender_pro_d=gender_pro_d[gender_pro_d['sum']>0]
+    gender_pro_d['female_rate']=gender_pro_d['女']/gender_pro_d['sum']
+    gender_pro_d['male_rate']=1-gender_pro_d['female_rate']
+    # python这点很奇怪，如果是无限的小数，图是画不出来，而如果是文本的话，画的高矮不一样，所以这能先变成文本然后在变成有限的小数
+    gender_pro_d['female_rate_2f']=gender_pro_d['female_rate'].apply(lambda x:'%.2f'%x).apply(lambda x:float(x))
+    gender_pro_d['male_rate_2f']=gender_pro_d['male_rate'].apply(lambda x:'%.2f'%x).apply(lambda x:float(x))
+    
+    # 手动构造一个df表示全体会员的男女人数
+    d=gender_pro_d.sum()
+    df=pd.DataFrame({'grid':'全体会员','男':d['男'],'女':d['女'],'sum':d['sum']},index={len(gender_pro_d)+1})
+    df['female_rate']=df['女']/df['sum']
+    df['male_rate']=df['男']/df['sum']
+    df['female_rate_2f']=df['female_rate'].apply(lambda x:'%.2f'%x).apply(lambda x:float(x))
+    df['male_rate_2f']=df['male_rate'].apply(lambda x:'%.2f'%x).apply(lambda x:float(x))
+    
+    gender_pro_d_re=pd.concat([gender_pro_d,df],axis=0)
+    
+    fig=plt.figure('32%s'%bid,figsize=(10,6),dpi=200)
+    # print(gender_pro_d_re)
+    plt.bar(gender_pro_d_re.index,gender_pro_d_re['female_rate_2f'],label='女性占比')
+    plt.bar(gender_pro_d_re.index,gender_pro_d_re['male_rate_2f'],bottom=gender_pro_d_re['female_rate_2f'],label='男性占比')
+    plt.xticks(gender_pro_d_re.index,gender_pro_d_re['grid'],rotation=15)
+    plt.legend(loc=3,bbox_to_anchor=[0,1],fontsize='small')
+    plt.hlines(y=0.5,xmin=0,xmax=5,linestyles='dashed')
+    plt.annotate(r'0.5',xy=(5.08,0.48))
+    plt.title('各等级的性别占比')
+    
+    plt.savefig('32%s各等级的性别占比'%bid)
+    
+    
+    
+    # 2.年龄占比
+    # /count(case when datediff(curdate(),u.ubirthday)>=0 then u.uid end),2),'%%'
+    age_pro='''select ccname as  '会员等级',
+    count(case when datediff(curdate(),u.ubirthday)/365 <= 18 then u.uid end) '0-18岁', 
+    count(case when datediff(curdate(),u.ubirthday)/365 >=19 and datediff(curdate(),u.ubirthday)/365 < 24 then u.uid end) '19-23岁', 
+    count(case when datediff(curdate(),u.ubirthday)/365 >=24 and datediff(curdate(),u.ubirthday)/365 < 31 then u.uid end) '24-30岁', 
+    count(case when datediff(curdate(),u.ubirthday)/365 >=31 and datediff(curdate(),u.ubirthday)/365 < 41 then u.uid end) '31-40岁', 
+    count(case when datediff(curdate(),u.ubirthday)/365 >=41 and datediff(curdate(),u.ubirthday)/365 < 51 then u.uid end) '41-50岁', 
+    count(case when datediff(curdate(),u.ubirthday)/365 >=51 then u.uid end) '51以上'
+    from 
+    (select ifnull(r.ccname,'%s')  as ccname,ubirthday,uid
+    from welife%s.welife_users%s a
+    left join welife_card_categories r on a.ccid=r.ccid 
+    where a.bid=%i and a.uregistered>=%s and a.uregistered < %s 
+    and a.uCardStatus=2  
+    -- and qrid='o14709796652953'  
+    -- and a.ccid in (3004945,3007787,3009255,3007788,3007789)
+    
+    ) u
+    group by ccname '''  %(myname,dbs,tbs,bid,p.ftime_s,p.ftime_e)
+    print('2.年龄占比')
+    age_pro_d=wesql(age_pro)
+    age_pro_d['sum']=age_pro_d['0-18岁']+age_pro_d['19-23岁']+age_pro_d['24-30岁']+age_pro_d['31-40岁']+age_pro_d['41-50岁']+age_pro_d['51以上']
+    age_pro_d['0-18岁占比']=age_pro_d['0-18岁']/age_pro_d['sum']
+    age_pro_d['19-23岁占比']=age_pro_d['19-23岁']/age_pro_d['sum']
+    age_pro_d['24-30岁占比']=age_pro_d['24-30岁']/age_pro_d['sum']
+    age_pro_d['31-40岁占比']=age_pro_d['31-40岁']/age_pro_d['sum']
+    age_pro_d['41-50岁占比']=age_pro_d['41-50岁']/age_pro_d['sum']
+    age_pro_d['51以上占比']=age_pro_d['51以上']/age_pro_d['sum']
+    
+    
+    # 和年龄的一样，构造出一个所有等级的全体会员
+    age_d_all=age_pro_d.sum()
+    age_d_all_new=pd.DataFrame({'会员等级':'全体会员','0-18岁':age_d_all['0-18岁'],'19-23岁':age_d_all['19-23岁'],'24-30岁':age_d_all['24-30岁'],
+                                '31-40岁':age_d_all['31-40岁'],'41-50岁':age_d_all['41-50岁'],'51以上':age_d_all['51以上'],'sum':age_d_all['sum']},index={len(age_pro_d)})
+    
+    age_d_all_new['0-18岁占比']=age_d_all_new['0-18岁']/age_d_all_new['sum']
+    age_d_all_new['19-23岁占比']=age_d_all_new['19-23岁']/age_d_all_new['sum']
+    age_d_all_new['24-30岁占比']=age_d_all_new['24-30岁']/age_d_all_new['sum']
+    age_d_all_new['31-40岁占比']=age_d_all_new['31-40岁']/age_d_all_new['sum']
+    age_d_all_new['41-50岁占比']=age_d_all_new['41-50岁']/age_d_all_new['sum']
+    age_d_all_new['51以上占比']=age_d_all_new['51以上']/age_d_all_new['sum']
+    
+    age_pro_d_all=pd.concat([age_pro_d,age_d_all_new],axis=0)
+    # 以上就是全体会员的心数据框
+    
+    
+    fig=plt.figure('33%s'%bid,figsize=(10,6),dpi=200)
+    plt.bar(age_pro_d_all.index,age_pro_d_all['0-18岁占比'],label='0-18岁')
+    plt.bar(age_pro_d_all.index,age_pro_d_all['19-23岁占比'],bottom=age_pro_d_all['0-18岁占比'],label='19-23岁')
+    plt.bar(age_pro_d_all.index,age_pro_d_all['24-30岁占比'],bottom=age_pro_d_all['0-18岁占比']+age_pro_d_all['19-23岁占比'],label='24-30岁')
+    
+    plt.bar(age_pro_d_all.index,age_pro_d_all['31-40岁占比'],bottom=age_pro_d_all['0-18岁占比']+
+            age_pro_d_all['19-23岁占比']+age_pro_d_all['24-30岁占比'],label='31-40岁')
+    
+    plt.bar(age_pro_d_all.index,age_pro_d_all['41-50岁占比'],bottom=age_pro_d_all['0-18岁占比']+
+            age_pro_d_all['19-23岁占比']+age_pro_d_all['24-30岁占比']+age_pro_d_all['31-40岁占比'],label='41-50岁')
+    
+    
+    plt.bar(age_pro_d_all.index,age_pro_d_all['51以上占比'],bottom=age_pro_d_all['0-18岁占比']+
+            age_pro_d_all['19-23岁占比']+age_pro_d_all['24-30岁占比']+age_pro_d_all['31-40岁占比']+age_pro_d_all['41-50岁占比'],label='51以上')
+    
+    plt.xticks(age_pro_d_all.index,age_pro_d_all['会员等级'],rotation=15)
+    plt.legend(loc=3,bbox_to_anchor=[0,1],fontsize='xx-small',ncol=6)
+    
+    plt.savefig('33%s各等级年龄分布'%bid)
+    
+    
+    
+    
+    # 3不同年龄的消费金额
+    consume_age_money_gap='''select 
+    sum(case when age<19 then tcTotalFee end)/100 as '0-18岁',
+    sum(case when age>=19 and age<24  then tcTotalFee end)/100 as '19-23岁',
+    sum(case when age>=24 and age<31  then tcTotalFee end)/100 as '24-30岁',
+    sum(case when age>=31 and age<41  then tcTotalFee end)/100 as '31-40岁',
+    sum(case when age>=41 and age<51  then tcTotalFee end)/100 as '41-50岁',
+    sum(case when age>=51   then tcTotalFee end)/100 as '51以上'
+    from (select uid,age from dprpt_dpdm_welife_user_summary where bid=%i 
+    -- and register_sid=3176332845
+    ) u
+    inner join (select uid,tcTotalFee from dprpt_welife_trade_consume_detail 
+    where bid=%i and tctype=2 and ftime>=%s and ftime<%s ) s 
+    on u.uid = s.uid'''%(bid,bid,p.ftime_s,p.ftime_e)
+    print('3.消费金额')
+    consume_age_money_gap_d=dwsql(consume_age_money_gap)
+    consume_age_money_gap_d=consume_age_money_gap_d.T.reset_index()
+    consume_age_money_gap_d.rename(columns={0:'消费金额'},inplace=True)
+    # print(consume_age_money_gap_d)
+    
+    # consume_age_money_gap_d.to_excel(w,'消费金额')
+    #3.2不同年龄的消费次数
+    consume_age_num_gap='''select 
+    sum(case when age<19 then trade_num end) as '0-18岁',
+    sum(case when age>=19 and age<24  then trade_num end) as '19-23岁',
+    sum(case when age>=24 and age<31  then trade_num end) as '24-30岁',
+    sum(case when age>=31 and age<41  then trade_num end) as '31-40岁',
+    sum(case when age>=41 and age<51  then trade_num end) as '41-50岁',
+    sum(case when age>=51   then trade_num end) as '51以上'
+    from (select uid,age from dprpt_dpdm_welife_user_summary where bid=%i 
+    -- and register_sid=3176332845
+    ) u
+    inner join (select uid,count(1) trade_num from dprpt_welife_trade_consume_detail 
+    where bid=%i and tctype=2 and ftime>=%s and ftime<%s group by uid) s 
+    on u.uid = s.uid'''%(bid,bid,p.ftime_s,p.ftime_e)
+    print('4.消费次数')
+    consume_age_num_gap_d=dwsql(consume_age_num_gap)
+    consume_age_num_gap_d=consume_age_num_gap_d.T.reset_index()
+    consume_age_num_gap_d.rename(columns={0:'消费次数'},inplace=True)
+    # print('==============')
+    # print(consume_age_num_gap_d)
+    consume_age_re=pd.merge(consume_age_money_gap_d,consume_age_num_gap_d,on='index')
+    
+    
+    consume_age_re['桌均']=consume_age_re['消费金额']/consume_age_re['消费次数']
+    
+    consume_age_re.fillna(0,inplace=True)
+    consume_age_re['桌均']=consume_age_re['桌均'].apply(lambda x:int(x))
+    # print(consume_age_re)
+    
+    # consume_age_re.to_excel(w,'桌均')
+    # w.save()
+    
+    fig=plt.figure('34%s'%bid,figsize=(10,6),dpi=200)
+    ax1=plt.subplot(121)
+    Xlabel=np.arange(len(consume_age_re['index']))
+    ax1.bar(Xlabel,consume_age_re['桌均'])
+    autolabel(Xlabel,consume_age_re['桌均'],13)
+    plt.xticks(Xlabel,consume_age_re['index'],fontsize='small',rotation=20)
+    plt.title('各年龄段桌均')
+    
+    ax2=plt.subplot(122)
+    ax2.bar(Xlabel,consume_age_re['消费金额'])
+    autolabel(Xlabel,consume_age_re['消费金额'],13)
+    plt.xticks(Xlabel,consume_age_re['index'],fontsize='small',rotation=20)
+    plt.title('各年龄段消费金额')
+    plt.yticks(())
+    
+    plt.savefig('34%s各年龄段消费金额'%bid)
+    # print(consume_age_re)
+    # close()
+    
+    
+    # 将原始数据形成excel
+    w=pd.ExcelWriter('%s会员画像.xlsx' %bsname)
+    gender_pro_d_re[['grid','男','女','sum']].to_excel(w,'性别占比',index=False)
+    age_pro_d_all.to_excel(w,'年龄占比',index=False)
+    consume_age_re.to_excel(w,'消费金额',index=False)
+    w.save()
+    
+    
+    
+    
+    # ===========cancleuserhaha===========
+    #-*- coding:utf-8 -*-
+    #"2018年1月31日"
+    
+    print('==============================')
+    print('取消关注')
+    print('==============================')
+    
+    
+    # 1.各等级每月新增（有几个会员等级就画几张图出来）包括取消关注的
+    huiyuan_new_create_grid='''select grid,month,sum(num) as new_create from(select
+    IFNULL(s.ccName,'普通会员') as 'grid',  
+    date_format(t.uRegistered, '%%Y%%m') as 'month',
+    count(1) num
+    from welife%s.welife_users%s t
+    left join welife_card_categories s on t.ccid = s.ccid
+    where t.bid =%i
+    and t.uRegistered >= %s
+    and t.uRegistered < %s
+    -- and t.uCardStatus=2
+    group by s.ccName,date_format(t.uRegistered,'%%Y%%m'))a group by grid,month'''  %(dbs,tbs,bid,p.ftime_s,p.ftime_e)
+    
+    print('1.整体会员新增')
+    huiyuan_new_create_grid_d=wesql(huiyuan_new_create_grid)
+    # 获得整体会员每月的发展情况
+    huiyuan_new_create_grid_d_grouped=huiyuan_new_create_grid_d.groupby('month').sum()
+    
+    # 取消索引，便于直接对列做出引用
+    huiyuan_new_create_grid_d_grouped=huiyuan_new_create_grid_d_grouped.reset_index()
+    huiyuan_new_create_grid_d_grouped['new_create']=huiyuan_new_create_grid_d_grouped['new_create'].apply(lambda x:int(x))
+    # print(huiyuan_new_create_grid_d_grouped)
+    huiyuan_new_create_grid_d_grouped['change']=huiyuan_new_create_grid_d_grouped['new_create'].pct_change()
+    # print(huiyuan_new_create_grid_d_grouped)
+    
+    
+    # cxuanf1(1, huiyuan_new_create_grid_d_grouped['month'], huiyuan_new_create_grid_d_grouped['new_create'], 
+    #        huiyuan_new_create_grid_d_grouped['change'], '每月会员的新增以及环比变化', '新增变化','环比',8)
+    
+    
+    # 2.每月取消关注的数量
+    # 每月取消关注的数量
+    cancle_user='''select 
+    date_format(t.uUnRegistered, '%%Y%%m') as 'unmonth',
+    count(distinct(uid)) as cancle_num
+    from welife%s.welife_users%s t
+    where t.bid =%i and t.uCardStatus=3
+    and date_format(t.uUnRegistered, '%%Y%%m%%d')>=%s and date_format(t.uUnRegistered, '%%Y%%m%%d')<%s
+    group by unmonth''' %(dbs,tbs,bid,p.ftime_s,p.ftime_e)
+    print('2.每月取消关注')
+    cancle_user_d=wesql(cancle_user)
+    # 有点奇怪的是月份是000000，于是将月份变成整数之后再进行筛选
+    cancle_user_d['unmonth2']=cancle_user_d['unmonth'].apply(lambda x:int(x))
+    cancle_user_d=cancle_user_d[cancle_user_d['unmonth2']>0]
+    # print(cancle_user_d)
+    cancle_user_d['change']=cancle_user_d['cancle_num'].pct_change()
+    # 取关的数据是后来新增的，所在在figure上统一添加了今天的日期3月23号
+    cxuanf1('3232%s'%bid, cancle_user_d['unmonth'], cancle_user_d['cancle_num'], cancle_user_d['change'], '每月取消关注的数量以及环比变化',
+            '取关人数', '环比', 15)
+    
+    
+    # 2.1计算每月取消关注的人数占每月新增人数的比
+    #         2.11获取每月的新增,将多余的列裁掉了
+    new_create_month=huiyuan_new_create_grid_d_grouped[['month','new_create']]
+    my_re=pd.merge(new_create_month,cancle_user_d,left_on='month',right_on='unmonth')
+    # 计算取关占新增的比
+    my_re['rate']=my_re['cancle_num']/my_re['new_create']
+    cline_h11('3237%s'%bid, my_re['month'], my_re['rate'], '每月取关人数占新增的比',13)
+    
+    
+    # 3.取消关注前一共的消费次数和消费金额
+    cancle_user_consume='''select t_gap,total_consumes_num,count(distinct(uno)) as number
+    from (
+    select  uno,datediff(uUnRegistered, uregistered) as t_gap,uConsumeNum as total_consumes_num
+    from welife%s.welife_users%s
+    where bid=%i and  date_format(uRegistered, '%%Y%%m%%d')>=%s and date_format(uRegistered, '%%Y%%m%%d')<%s
+    and uCardStatus=3) a
+    group by t_gap,total_consumes_num''' %(dbs,tbs,bid,p.ftime_s,p.ftime_e)
+    
+    print('3.取消关注的消费情况')
+    cancle_user_consume_d=wesql(cancle_user_consume)
+    
+    # 当uCardStatus=3的时候，有些会员没有取消关注的时间，依据亮哥的说法，是因为导入的用户有注册时间，没有取消关注的时间，
+    # 也就是这些用户之间就已经取消关注了,所以让间隔时间大于0以过滤这批用户
+    cancle_user_consume_d=cancle_user_consume_d[cancle_user_consume_d['t_gap']>=0]
+    # 现在cancle_user_consume_d包括了关注到取消关注的时间间隔，累计消费次数和人数，然后分别用时间间隔和累计消费次数来groupby以求出
+    # 不同间隔的人数，和各累计消费次数下的人数
+    
+    
+    
+    # 算出不同间隔天数下的人数
+    cancle_re1=pd.pivot_table(cancle_user_consume_d,index='t_gap',values='number',aggfunc=np.sum)
+    cancle_re1=cancle_re1.reset_index()
+    
+    # 写出这个cut函数花了很多时间，暴露出很大问题呀，大于180天以上的还没有标签，13个点需要12个标签
+    cut_points=[0,0.9,7,14,21,28,35,42,49,60,90,120,180]
+    labels=['0-当天','1-7天','8-14天','15-21天','22-28天','29-35天','36-42天','43-49天','50-60天','61-90天','91-120天','121-180天']
+    cancle_re1['interval']=cmycut(cancle_re1['t_gap'], cut_points, labels)
+    cancle_re1['interval']=cancle_re1['interval'].where(cancle_re1['interval'].notnull(),'180-天以上')
+    # 到此便得出了每一天所在的区间，然后在透视
+    cancle_re1_re=pd.pivot_table(cancle_re1,index='interval',values='number',aggfunc=np.sum)
+    cancle_re1_re=cancle_re1_re.reset_index()
+    cancle_re1_re['number'].fillna(0,inplace=True)
+    cancle_re1_re['占比']=cancle_re1_re['number']/cancle_re1_re['number'].sum()
+    # print(cancle_re1_re)
+    # cancle_re1_re.fillna(0,inplace=True)
+    
+    # close()
+    cancle_data=[]
+    for a in cancle_re1_re['interval']:
+        d=int(a.split('-')[0])
+        cancle_data.append(d)
+    cancle_re1_re['interval_split']=cancle_data
+    cancle_re1_re_re2=cancle_re1_re.sort_values(by='interval_split')
+    cancle_re1_re_re2['new_index']=np.arange(len(cancle_re1_re_re2))
+    cancle_re1_re_re2=cancle_re1_re_re2.set_index('new_index')
+    cancle_re1_re_re2=cancle_re1_re_re2.reset_index()
+    cxuanf('3235%s'%bid, cancle_re1_re_re2['new_index'], cancle_re1_re_re2['interval'], cancle_re1_re_re2['number'],
+           cancle_re1_re_re2['占比'], '不同时间段取关人数和占比', '取关人数', '取关人数占比')
+    
+    
+    # 算出取关前的累计消费次数
+    cancle_re2=pd.pivot_table(cancle_user_consume_d,index='total_consumes_num',values='number',aggfunc=np.sum)
+    cancle_re2=cancle_re2.reset_index()
+    # cut_points2=[0,0.9,1.9,2.9,3.9,10000]
+    # labels2=['0次','1次','2次','3次','4次及以上']
+    cut_points2=[0,0.9,1.9,10000]
+    labels2=['0次','1次','2次及以上']
+    
+    cancle_re2['times']=cmycut(cancle_re2['total_consumes_num'],cut_points2,labels2)
+    cancle_re2_re=pd.pivot_table(cancle_re2,index='times',values='number',aggfunc=np.sum)
+    cancle_re2_re=cancle_re2_re.reset_index()
+    cancle_re2_re=cancle_re2_re[cancle_re2_re['number']>0]
+    # print(cancle_re2_re)
+    cbing1('3236%s'%bid, cancle_re2_re['number'],cancle_re2_re['times'], '取关前的累计消费次数')
+    
+    
+    # 11.会员的资料完善程度
+    # 没有取关资料的完善程度
+    info_makeup='''select date_format(u.uregistered, '%%Y%%m') '月份',
+    count(u.uid) '总人数', 
+    count(case when u.uGender=2 or u.ugender=1 then u.uid end) '性别完善人数',
+    count(case when datediff(curdate(),u.ubirthday)>=0 then u.uid end) '生日完善人数',
+    count(case when (u.uGender=2 or u.ugender=1) and datediff(curdate(),u.ubirthday)>=0 and u.uphone>0 and u.uname is not null then u.uid end) '全部资料完善人数',
+    count(case when u.uphone>0 then u.uid end) '手机号完善人数',
+    count(case when u.uname is not null then u.uid end) '姓名完善程人数',
+    concat(round(100*count(case when u.uname is not null then u.uid end)/count(u.uid),2),'%%') '姓名完善度',
+    concat(round(100*count(case when u.uphone>0 then u.uid end)/count(u.uid),2),'%%') '手机号完善度',
+    concat(round(100*count(case when u.uGender=2 or u.ugender=1 then u.uid end)/count(u.uid),2),'%%') '性别资料完善度',
+    concat(round(100*count(case when datediff(curdate(),u.ubirthday)>=0 then u.uid end)/count(u.uid),2),'%%') '生日资料完善度',
+    concat(round(100*count(case when (u.uGender=2 or u.ugender=1) and datediff(curdate(),u.ubirthday)>=0 and u.uphone>0 and u.uname is not null then u.uid end)/count(u.uid),2),'%%') '全部资料完善度'
+    from welife%s.welife_users%s u 
+    where u.uregistered>='%s' and u.uregistered < '%s' 
+    and u.bid=%i
+    and uCardStatus=2
+    group by date_format(u.uregistered, '%%Y%%m')''' %(dbs,tbs,p.ftime_s,p.ftime_e,bid)
+    print('11.未取关的资料完善')
+    info_makeup_d=wesql(info_makeup)
+    # 只选择全部资料完善程度
+    info_makeup_d_all=info_makeup_d[['月份','总人数','全部资料完善人数','手机号完善人数']]
+    info_makeup_d_all=info_makeup_d_all.copy()
+    info_makeup_d_all['all_rate']=info_makeup_d_all['全部资料完善人数']/info_makeup_d_all['总人数']
+    cline_h1('32316%s'%bid, info_makeup_d_all['月份'],info_makeup_d_all['all_rate'] , '未取关会员全部资料完善程度占比', 15)
+    # 西贝的全部资料完善的程度太低了，所以在拿出手机号出来看看
+    info_makeup_d_all['phone_rate']=info_makeup_d_all['手机号完善人数']/info_makeup_d_all['总人数']
+    cline_h1('32317%s'%bid, info_makeup_d_all['月份'],info_makeup_d_all['phone_rate'] , '未取关会员手机完善程度占比', 15)
+    
+    
+    
+    # 取关的人的完善资料的程度
+    cancle_user_info_makeup='''select date_format(u.uregistered, '%%Y%%m') '月份',
+    count(u.uid) '总人数', 
+    count(case when u.uGender=2 or u.ugender=1 then u.uid end) '性别完善人数',
+    count(case when datediff(curdate(),u.ubirthday)>=0 then u.uid end) '生日完善人数',
+    count(case when (u.uGender=2 or u.ugender=1) and datediff(curdate(),u.ubirthday)>=0 and u.uphone>0 and u.uname is not null then u.uid end) '全部资料完善人数',
+    count(case when u.uphone>0 then u.uid end) '手机号完善人数',
+    count(case when u.uname is not null then u.uid end) '姓名完善程人数',
+    concat(round(100*count(case when u.uname is not null then u.uid end)/count(u.uid),2),'%%') '姓名完善度',
+    concat(round(100*count(case when u.uphone>0 then u.uid end)/count(u.uid),2),'%%') '手机号完善度',
+    concat(round(100*count(case when u.uGender=2 or u.ugender=1 then u.uid end)/count(u.uid),2),'%%') '性别资料完善度',
+    concat(round(100*count(case when datediff(curdate(),u.ubirthday)>=0 then u.uid end)/count(u.uid),2),'%%') '生日资料完善度',
+    concat(round(100*count(case when (u.uGender=2 or u.ugender=1) and datediff(curdate(),u.ubirthday)>=0 and u.uphone>0 and u.uname is not null then u.uid end)/count(u.uid),2),'%%') '全部资料完善度'
+    from welife%s.welife_users%s u 
+    where u.uregistered>='%s' and u.uregistered < '%s' 
+    and u.bid=%i and uCardStatus=3
+    group by date_format(u.uregistered, '%%Y%%m')''' %(dbs,tbs,p.ftime_s,p.ftime_e,bid)
+    print('11.2取消关注的人完善资料程度')
+    cancle_user_info_makeup=wesql(cancle_user_info_makeup)
+    cancle_user_info_makeup_all=cancle_user_info_makeup[['月份','总人数','全部资料完善人数','手机号完善人数']]
+    cancle_user_info_makeup_all=cancle_user_info_makeup_all.copy()
+    cancle_user_info_makeup_all['all_rate']=cancle_user_info_makeup_all['全部资料完善人数']/cancle_user_info_makeup_all['总人数']
+    cline_h1('32318%s'%bid, cancle_user_info_makeup_all['月份'],cancle_user_info_makeup_all['all_rate'] , '取关会员全部资料完善程度占比', 15)
+    
+    cancle_user_info_makeup_all['phone_rate']=cancle_user_info_makeup_all['手机号完善人数']/cancle_user_info_makeup_all['总人数']
+    cline_h1('32319%s'%bid, cancle_user_info_makeup_all['月份'],cancle_user_info_makeup_all['phone_rate'] , '取关会员手机完善程度占比', 15)
+    
+    
+    
+    
+    # 消费会员的未消费会员的完善资料程度
+    
+    # 消费会员资料的完善程度
+    consume_info_makeup='''select date_format(u.uregistered, '%%Y%%m') '月份',
+    count(u.uid) '总人数', 
+    count(case when u.uGender=2 or u.ugender=1 then u.uid end) '性别完善人数',
+    count(case when datediff(curdate(),u.ubirthday)>=0 then u.uid end) '生日完善人数',
+    count(case when (u.uGender=2 or u.ugender=1) and datediff(curdate(),u.ubirthday)>=0 and u.uphone>0 and u.uname is not null then u.uid end) '全部资料完善人数',
+    count(case when u.uphone>0 then u.uid end) '手机号完善人数',
+    count(case when u.uname is not null then u.uid end) '姓名完善程人数',
+    concat(round(100*count(case when u.uname is not null then u.uid end)/count(u.uid),2),'%%') '姓名完善度',
+    concat(round(100*count(case when u.uphone>0 then u.uid end)/count(u.uid),2),'%%') '手机号完善度',
+    concat(round(100*count(case when u.uGender=2 or u.ugender=1 then u.uid end)/count(u.uid),2),'%%') '性别资料完善度',
+    concat(round(100*count(case when datediff(curdate(),u.ubirthday)>=0 then u.uid end)/count(u.uid),2),'%%') '生日资料完善度',
+    concat(round(100*count(case when (u.uGender=2 or u.ugender=1) and datediff(curdate(),u.ubirthday)>=0 and u.uphone>0 and u.uname is not null then u.uid end)/count(u.uid),2),'%%') '全部资料完善度'
+    from welife%s.welife_users%s u 
+    where u.uregistered>='%s' and u.uregistered < '%s' 
+    and u.bid=%i
+    and uConsumeNum >0
+    group by date_format(u.uregistered, '%%Y%%m')''' %(dbs,tbs,p.ftime_s,p.ftime_e,bid)
+    print('13.有消费会员的资料完善')
+    consume_info_makeup_d=wesql(consume_info_makeup)
+    # 只选择全部资料完善程度
+    consume_info_makeup_d_all=consume_info_makeup_d[['月份','总人数','全部资料完善人数','手机号完善人数']]
+    consume_info_makeup_d_all=consume_info_makeup_d_all.copy()
+    consume_info_makeup_d_all['all_rate']=consume_info_makeup_d_all['全部资料完善人数']/consume_info_makeup_d_all['总人数']
+    cline_h1('323161%s'%bid, consume_info_makeup_d_all['月份'],consume_info_makeup_d_all['all_rate'] , '有消费会员全部资料完善程度占比', 13)
+    # 西贝的全部资料完善的程度太低了，所以在拿出手机号出来看看
+    consume_info_makeup_d_all['phone_rate']=consume_info_makeup_d_all['手机号完善人数']/consume_info_makeup_d_all['总人数']
+    cline_h1('323171%s'%bid, consume_info_makeup_d_all['月份'],consume_info_makeup_d_all['phone_rate'] , '有消费会员手机完善程度占比', 13)
+    
+    
+    
+    
+    # 未消费消费会员资料的完善程度
+    non_consume_info_makeup='''select date_format(u.uregistered, '%%Y%%m') '月份',
+    count(u.uid) '总人数', 
+    count(case when u.uGender=2 or u.ugender=1 then u.uid end) '性别完善人数',
+    count(case when datediff(curdate(),u.ubirthday)>=0 then u.uid end) '生日完善人数',
+    count(case when (u.uGender=2 or u.ugender=1) and datediff(curdate(),u.ubirthday)>=0 and u.uphone>0 and u.uname is not null then u.uid end) '全部资料完善人数',
+    count(case when u.uphone>0 then u.uid end) '手机号完善人数',
+    count(case when u.uname is not null then u.uid end) '姓名完善程人数',
+    concat(round(100*count(case when u.uname is not null then u.uid end)/count(u.uid),2),'%%') '姓名完善度',
+    concat(round(100*count(case when u.uphone>0 then u.uid end)/count(u.uid),2),'%%') '手机号完善度',
+    concat(round(100*count(case when u.uGender=2 or u.ugender=1 then u.uid end)/count(u.uid),2),'%%') '性别资料完善度',
+    concat(round(100*count(case when datediff(curdate(),u.ubirthday)>=0 then u.uid end)/count(u.uid),2),'%%') '生日资料完善度',
+    concat(round(100*count(case when (u.uGender=2 or u.ugender=1) and datediff(curdate(),u.ubirthday)>=0 and u.uphone>0 and u.uname is not null then u.uid end)/count(u.uid),2),'%%') '全部资料完善度'
+    from welife%s.welife_users%s u 
+    where u.uregistered>='%s' and u.uregistered < '%s' 
+    and u.bid=%i
+    and uConsumeNum <1
+    group by date_format(u.uregistered, '%%Y%%m')''' %(dbs,tbs,p.ftime_s,p.ftime_e,bid)
+    print('14.未消费会员的资料完善')
+    non_consume_info_makeup_d=wesql(non_consume_info_makeup)
+    # 只选择全部资料完善程度
+    non_consume_info_makeup_d_all=non_consume_info_makeup_d[['月份','总人数','全部资料完善人数','手机号完善人数']]
+    non_consume_info_makeup_d_all=non_consume_info_makeup_d_all.copy()
+    non_consume_info_makeup_d_all['all_rate']=non_consume_info_makeup_d_all['全部资料完善人数']/non_consume_info_makeup_d_all['总人数']
+    cline_h1('323162%s'%bid, non_consume_info_makeup_d_all['月份'],non_consume_info_makeup_d_all['all_rate'] , '未消费会员全部资料完善程度占比', 13)
+    # 西贝的全部资料完善的程度太低了，所以在拿出手机号出来看看
+    non_consume_info_makeup_d_all['phone_rate']=non_consume_info_makeup_d_all['手机号完善人数']/non_consume_info_makeup_d_all['总人数']
+    cline_h1('323172%s'%bid, non_consume_info_makeup_d_all['月份'],non_consume_info_makeup_d_all['phone_rate'] , '未消费会员手机完善程度占比', 13)
+    
+    # ====================homepagehaha====================
+    #-*- coding:utf-8 -*-
+    #"2018年3月20日"
+    
+    print('================')
+    print('homepage')
+    print('================')
+    
+    
+    # 1.总的存量和各等级的存量
+    huiyuan_new_create_grid='''select grid,sum(num) as new_create from(select
+    IFNULL(s.ccName,'%s') as 'grid',  
+    date_format(t.uRegistered, '%%Y%%m') as 'month',
+    count(1) num
+    from welife%s.welife_users%s t
+    left join welife_card_categories s on t.ccid = s.ccid
+    where t.bid =%i
+    -- and t.uRegistered >= %s
+    and t.uRegistered < %s
+    -- and t.uCardStatus=2
+    group by s.ccName,date_format(t.uRegistered,'%%Y%%m'))a group by grid'''  %(myname,dbs,tbs,bid,p.ftime_s,p.ftime_e)
+    
+    print('1存量')
+    huiyuan_new_create_grid_d=wesql(huiyuan_new_create_grid)
+    # print(huiyuan_new_create_grid_d.head())
+    num_order=huiyuan_new_create_grid_d.sort_values(by=['new_create'],ascending=False)
+    new_index=np.arange(len(num_order))
+    num_order2=num_order.set_index(new_index)
+    # print(num_order2)
+    
+    # 将各等级的会员拆分为两部分，其一是数量最多的前三个等级，其二是后面的几个等级归为其他类
+    if len(num_order2)>3:
+        other_vip=num_order2.ix[3:,:]
+        other_total=other_vip['new_create'].sum()
+    elif len(num_order2)==1:
+        newpd=pd.DataFrame({'grid':'需要删除','new_create':0},index=[1,2])
+        num_order2=pd.concat([num_order2,newpd])
+        other_total=0
+    elif len(num_order2)==2:
+        newpd=pd.DataFrame({'grid':'需要删除','new_create':0},index=[2])
+        num_order2=pd.concat([num_order2,newpd])  
+        other_total=0
+    else:
+        other_total=0
+    total_num=huiyuan_new_create_grid_d['new_create'].sum()
+    # print(num_order2)
+    # close()
+    
+    
+    # 2.消费次数
+    #首次消费金额以及次数(用10元过滤掉单独核销券的消费）
+    consume_num_grid_first='''select  date_format(ftime,'%%Y%%m') as month ,
+    sum(fee) '首次消费金额' ,count(uid) as 首次消费次数,count(distinct(uid)) as 首次消费人数
+    from (select uid,grid,tcTotalFee/100 fee,min(tclcreated) ftime
+    from dprpt_welife_trade_consume_detail 
+    where 
+    -- ftime>=%s and 
+    ftime<%s and bid=%i
+    and tctype=2
+    and tcTotalFee>10000
+    group by uid) a                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+    group by month''' %(p.ftime_s,p.ftime_e,bid)
+    consume_num_grid_first_d=dwsql(consume_num_grid_first)
+    
+    # 总消费次数
+    consume_num_grid='''select date_format(ftime,'%%Y%%m') as month,
+    sum(tctotalfee/100) '消费金额',count(1) '消费次数',
+    count(distinct(uid)) '消费人数'
+    from dprpt_welife_trade_consume_detail 
+    where 
+    -- ftime>%s and 
+    ftime<%s and bid=%i 
+    and tctype=2
+    and tcTotalFee>10000
+    group by month''' %(p.ftime_s,p.ftime_e,bid)
+    consume_num_grid_d=dwsql(consume_num_grid)
+    re1=pd.merge(consume_num_grid_d,consume_num_grid_first_d,on='month')
+    re1['再次消费次数']=re1['消费次数']-re1['首次消费次数']
+    re2=re1[['消费次数','首次消费次数','再次消费次数']]
+    # print('re2',re2)
+    re3=re2.sum()
+    # print('消费次数')
+    # print(re3['消费次数'])
+    
+    
+    
+    # 3.储值
+    # -----------储值金额实收
+    charge_tcsale='''select date_format(c.tccreated,'%%Y%%m') month,
+    sum(c.tcsale/100) '储值金额实收'
+    from welife_trade_charges c 
+    where c.bid=%i  and 
+    -- c.tccreated >= %s and  
+    c.tccreated < %s   
+    and tcChargeType <> 19
+    and c.tcStatus=1 and tcType=1 
+    group by month''' %(bid,p.ftime_s,p.ftime_e)
+    charge_tcsale_d=wesql(charge_tcsale)
+    if charge_tcsale_d.empty:
+        charge_tcsale_d=pd.DataFrame({'month':'201601','储值金额实收':100},index=[0])
+    
+    #-----------储值金额消耗
+    charge_consume='''select date_format(ftime,'%%Y%%m') month,
+    sum(case when tctype in (2,8) then tclprinciple/100 end) - ifnull(sum(case when tctype=3 then tclprinciple/100 end),0) '储值实收消耗'
+    from dprpt_welife_trade_consume_detail
+    where 
+    -- ftime>=%s and
+    ftime<%s 
+    and bid=%i
+    group by month''' %(p.ftime_s,p.ftime_e,bid)
+    charge_consume_d=dwsql(charge_consume)
+    if charge_consume_d.empty:
+        charge_consume_d=pd.DataFrame({'month':'201701','储值实收消耗':0},index=[0])
+    charge_consume_d.fillna(0,inplace=True)
+    re5=pd.merge(charge_tcsale_d,charge_consume_d,on='month')
+    re5['储值沉淀']=re5['储值金额实收']-re5['储值实收消耗']
+    if re5.empty:
+        re5=pd.DataFrame({'储值金额实收':0,'储值实收消耗':0,'储值沉淀':0},index=[0])
+    re6=re5.sum()
+    
+    
+    re6=re5[['储值金额实收','储值实收消耗','储值沉淀']].sum().apply(lambda x:int(x))
+    
+    # close()
+    
+    
+    
+    
+    # 4.积分
+    # 积分的使用人数(这里是依照grid分组求的，做图时候可以只算全部的使用率)
+    point_use_grid='''select count(distinct(case when a.sendpoint > 0 then a.uid end)) '积分发放人数',
+    count(distinct(case when pointpay > 0  then a.uid end)) '积分使用人数'
+    -- ,concat(round(100*count(distinct(case when a.pointpay > 0 then a.uid end))/count(distinct(a.uid)),2),'%%') '使用积分抵扣占比'
+    from dprpt_welife_trade_consume_detail a
+    where bid=%i
+    and tctype=2 
+    -- and ftime>=%s
+    and ftime<%s ''' %(bid,p.ftime_s,p.ftime_e)
+    print('2.积分使用人数')
+    point_use_grid_d=dwsql(point_use_grid)
+    psendnum=point_use_grid_d.ix[0,'积分发放人数']
+    pusednum=point_use_grid_d.ix[0,'积分使用人数']
+    # print(point_use_grid_d)
+    
+    
+    #积分的使用数量
+    point_use_number='''select  
+    sum(case when t.tctradetype = 1 then t.tccredit end) 发放积分,
+    sum(case when t.tctradetype = 2 then t.tccredit end) 使用积分
+    -- concat(round(100*sum(case when t.tctradetype = 2 then t.tccredit end)/sum(case when t.tctradetype = 1 then t.tccredit end),2),'%%') '积分消耗占比'
+    from welife_trade_credit t
+    where bid=%i
+    -- and tcCreated >= %s
+    and tcCreated < %s ''' %(bid,p.ftime_s,p.ftime_e)
+    print('3.积分使用数量')
+    point_use_number_d=wesql(point_use_number)
+    point_use_number_d.fillna(0,inplace=True)
+    nsendnum=point_use_number_d.ix[0,'发放积分']
+    nusednum=point_use_number_d.ix[0,'使用积分']
+    # print(point_use_number_d)
+    
+    
+    
+    # 折扣力度
+    zhekoulidu='''select  sum(tctotalfee)/100 as 消费总金额,sum(tcfee)/100 as  消费实收现金,
+    sum(tclprinciple)/100 as '消费使用储值本金' from 
+    dprpt_welife_trade_consume_detail 
+    where 
+    -- ftime>%s and 
+    ftime<%s and  bid=%i and tctype=2''' %(p.ftime_s,p.ftime_e,bid)
+    
+    zhekoulidu_d=dwsql(zhekoulidu)
+    zhekoulidu_d['折扣力度']=(zhekoulidu_d['消费实收现金']+zhekoulidu_d['消费使用储值本金'])/zhekoulidu_d['消费总金额']
+    # print('折扣力度')
+    print(zhekoulidu_d)
+    zhekou=zhekoulidu_d.ix[0,'折扣力度']
+    
+    
+    
+    # 取关人数
+    cancle_user='''select 
+    count(distinct(uid)) as cancle_num
+    from welife%s.welife_users%s t
+    where t.bid =%i  and t.uCardStatus=3
+    -- and uRegistered>=%s
+    and uRegistered<%s'''  %(dbs,tbs,bid,p.ftime_s,p.ftime_e)
+    cancle_user_d=wesql(cancle_user)
+    # print('取关人数')
+    print(cancle_user_d)
+    c_num=cancle_user_d.ix[0,'cancle_num']
+    
+    
+    
+   
+    
+    # ===========toppthaha==================
+    
+    
+    
+    
+    
+    consume_month_sid_d=pd.read_excel('各分店的营业额与桌均.xlsx',sheet_name='data')
+    consume_month_sid_d_charge=pd.read_excel('charge_vip_churn_rate_sid_d_liushi.xlsx',sheet_name='charge')
+    non_consume_month_sid_d_charge=pd.read_excel('charge_vip_churn_rate_sid_d_liushi.xlsx',sheet_name='nocharge')
+    
+    
+    print('=========================')
+    print('to_pptx')
+    print('=========================')
+    
+    mytime=pd.to_datetime(p.ftime_e,format='%Y%m%d')
+    # 将给出的截至时间减去28天，得到最近一个月的时间
+    mytime=mytime+datetime.timedelta(days=-28)
+    #  比如，从20171201得到201712，并变成文本
+    mytime=mytime.strftime('%Y%m')
+    prs=Presentation('template.pptx')
+    
+    
+    
+    # 补充1：添加开始页
+    
+    slide_start=prs.slides.add_slide(prs.slide_layouts[3])
+    t1=slide_start.placeholders[0]
+    t1.text='%s数据分析报告' %bsname
+    
+    a=pd.to_datetime(p.ftime_s,format='%Y%m%d')
+    a=a.strftime('%Y.%m.%d')
+    
+    # 截至时间减1就是真正的取数据的时间
+    b=pd.to_datetime(p.ftime_e,format='%Y%m%d')
+    b=b+datetime.timedelta(days=-1)
+    b=b.strftime('%Y.%m.%d')
+    
+    t2=slide_start.placeholders[1]
+    t2.text='%s——%s' %(a,b)
+    
+    # 补充2：添加目录
+    slide_content=prs.slides.add_slide(prs.slide_layouts[15])
+    
+    # 由于整体运营情况是后来新增的，而且直接复制的新增部分，所有很多命名的习惯沿用了新增部分的命名
+    
+    print('slide1--添加整体运营部分')
+    slide1a=prs.slides.add_slide(prs.slide_layouts[1])
+    myslide1Aa=slide1a.placeholders[11]
+    myslide1Ba=slide1a.placeholders[10]
+    myslide1Aa.text='01'
+    myslide1Ba.text='整体运营情况分析'
+    
+    # ------------------------------------------------添加概览部分------------------------------------------------------------
+    
+    
+    # 以上备注的是老版的概览部分，过于简单所以换成新版的
+    slide2=prs.slides.add_slide(prs.slide_layouts[19])
+    
+    t1=slide2.placeholders[16]
+    t1.text='整体概览'
+    
+    t1=slide2.placeholders[17]
+    t1.text='%s' %"{:,}".format(int(total_num))
+    
+    t1=slide2.placeholders[19]
+    t1.text='%s' %"{:,}".format(int(re3['消费次数']))
+    
+    t1=slide2.placeholders[20]
+    t1.text='%s' %"{:,}".format(int(re3['首次消费次数']))
+    
+    t1=slide2.placeholders[21]
+    t1.text='%s' %"{:,}".format(int(re3['再次消费次数']))
+    
+    t1=slide2.placeholders[22]
+    t1.text='%s' %"{:,}".format(int(re6['储值金额实收']))
+    
+    t1=slide2.placeholders[23]
+    t1.text='%s' %"{:,}".format(int(re6['储值沉淀']))
+    
+    
+    # 折扣力度
+    t1=slide2.placeholders[24]
+    t1.text='%s' %"{:,}".format(round(zhekou,2))
+    
+    # 积分发放数量和使用数量
+    t1=slide2.placeholders[26]
+    t1.text='{:,} / {:,}'.format(int(nsendnum),int(nusednum))
+    
+    # 积分发放和使用人数
+    t1=slide2.placeholders[25]
+    t1.text='{:,} / {:,}'.format(int(psendnum),int(pusednum))
+    
+    
+    # 取关人数
+    t1=slide2.placeholders[27]
+    t1.text='%s' %"{:,}".format(int(c_num))
+    
+    # 新增第一个等级
+    t1=slide2.placeholders[28]
+    t1.text='%s:' %num_order2.ix[0,'grid']
+    t1=slide2.placeholders[29]
+    t1.text='{:,}'.format(int(num_order2.ix[0,'new_create']))
+    t1=slide2.placeholders[30]
+    # 新增第二个等级
+    t1.text='%s:' %num_order2.ix[1,'grid']
+    t1=slide2.placeholders[31]
+    t1.text='{:,}'.format(int(num_order2.ix[1,'new_create']))
+    t1=slide2.placeholders[32]
+    # 新增第三个等级
+    t1.text='%s:' %num_order2.ix[2,'grid']
+    t1=slide2.placeholders[33]
+    t1.text='{:,}'.format(int(num_order2.ix[2,'new_create']))
+    # 新增的其他等级
+    t1=slide2.placeholders[34]
+    t1.text='其他等级:'
+    t1=slide2.placeholders[35]
+    t1.text='{:,}'.format(int(other_total))
+    
+    
+    
+    # ------------------------------------------------新增部分------------------------------------------------------------------
+    print('slide1--添加第一个目录部分')
+    slide1=prs.slides.add_slide(prs.slide_layouts[1])
+    myslide1A=slide1.placeholders[11]
+    myslide1B=slide1.placeholders[10]
+    myslide1A.text='02'
+    myslide1B.text='会员发展情况分析'
+    
+    
+    print('slide1.1--添加第一个小目录部分')
+    slide2=prs.slides.add_slide(prs.slide_layouts[21])
+    myslide14Aa=slide2.placeholders[15]
+    myslide15Ba=slide2.placeholders[16]
+    myslide14Aa.text='1.会员新增情况'
+    myslide15Ba.text='2.会员取关情况'
+    
+    
+    print('slide1.2--新增情况')
+    slide1=prs.slides.add_slide(prs.slide_layouts[2])
+    myslide1B=slide1.placeholders[14]
+    myslide1B.text='1.会员新增情况'
+    
+    
+    print('slide2--整体会员的新增1')
+    slide2=prs.slides.add_slide(prs.slide_layouts[0])
+    slide2A=slide2.placeholders[14]
+    slide2A.text='会员发展'
+    myslide2B=slide2.placeholders[15]
+    pic=myslide2B.insert_picture('1整体会员的新增.png')
+    
+    
+    print('slide3--各等级会员新增2')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员发展'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('1992%s每月各等级新增.png'%bid)
+    
+    print('slide4--%s分店会员新增3' %mytime)
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员发展'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('3分店会员新增.png')
+    
+    
+    print('slide5--201711门店新增对比99')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员发展'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('99%s%s门店新增对比.png' %(bid,mytime))
+    
+    
+    print('slide6--有消费会员占存量的比——等级4')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员发展'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('4%s有消费会员占存量的比——等级.png'%bid)
+    
+    
+    # --------------------------
+    
+    print('slide7--取消关注')
+    slide1=prs.slides.add_slide(prs.slide_layouts[2])
+    myslide1B=slide1.placeholders[14]
+    myslide1B.text='2.会员取关情况'
+    
+    print('slide8--每月取关占新增比')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员发展'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('3237%s每月取关人数占新增的比.png'%bid)
+    
+    print('slide9--每月取关人数及环比变化')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员发展'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('3232%s每月取消关注的数量以及环比变化.png'%bid)
+    
+    
+    print('slide10--取关人数的消费时间段')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员发展'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('3235%s不同时间段取关人数和占比.png'%bid)
+    
+    
+    print('slide11--取关前累计消费次数')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员发展'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('3236%s取关前的累计消费次数.png'%bid)
+    
+    
+    
+    print('slide12--是否取关全部资料完善程度')
+    slide2=prs.slides.add_slide(prs.slide_layouts[7])
+    slide2A=slide2.placeholders[14]
+    slide2A.text='会员发展'
+    myslide2B=slide2.placeholders[15]
+    pic=myslide2B.insert_picture('32316%s未取关会员全部资料完善程度占比.png'%bid)
+    myslide2C=slide2.placeholders[16]
+    pic=myslide2C.insert_picture('32318%s取关会员全部资料完善程度占比.png'%bid)
+    
+    
+    
+    # print('slide13--是否消费全部资料完善程度')
+    # slide2=prs.slides.add_slide(prs.slide_layouts[7])
+    # slide2A=slide2.placeholders[14]
+    # slide2A.text='会员发展'
+    # myslide2B=slide2.placeholders[15]
+    # pic=myslide2B.insert_picture('323161有消费会员全部资料完善程度占比.png')
+    # myslide2C=slide2.placeholders[16]
+    # pic=myslide2C.insert_picture('323162未消费会员全部资料完善程度占比.png')
+    
+    
+    
+    
+    
+    print('slide14--是否取关手机号完善程度')
+    slide2=prs.slides.add_slide(prs.slide_layouts[7])
+    slide2A=slide2.placeholders[14]
+    slide2A.text='会员发展'
+    myslide2B=slide2.placeholders[15]
+    pic=myslide2B.insert_picture('32317%s未取关会员手机完善程度占比.png'%bid)
+    myslide2C=slide2.placeholders[16]
+    pic=myslide2C.insert_picture('32319%s取关会员手机完善程度占比.png'%bid)
+    
+    
+    # print('slide15--是否消费手机号完善程度')
+    # slide2=prs.slides.add_slide(prs.slide_layouts[7])
+    # slide2A=slide2.placeholders[14]
+    # slide2A.text='会员发展'
+    # myslide2B=slide2.placeholders[15]
+    # pic=myslide2B.insert_picture('323171有消费会员手机完善程度占比.png')
+    # myslide2C=slide2.placeholders[16]
+    # pic=myslide2C.insert_picture('323172未消费会员手机完善程度占比.png')
+    
+    
+    
+    
+    # ------------------------------------------------消费部分------------------------------------------------------------------
+    
+    
+    
+    print('slide16--添加第三个目录部分')
+    slide1=prs.slides.add_slide(prs.slide_layouts[1])
+    myslide1A=slide1.placeholders[11]
+    myslide1B=slide1.placeholders[10]
+    myslide1A.text='03'
+    myslide1B.text='会员消费情况分析'
+    
+    print('slide16.1--添加第二个小目录部分')
+    slide2=prs.slides.add_slide(prs.slide_layouts[20])
+    myslide14Aa=slide2.placeholders[14]
+    myslide15Ba=slide2.placeholders[15]
+    myslide16Aa=slide2.placeholders[16]
+    myslide17Ba=slide2.placeholders[17]
+    myslide14Aa.text='1.会员消费强度'
+    myslide15Ba.text='2.会员消费密度'
+    myslide16Aa.text='3.会员消费近度'
+    myslide17Ba.text='4.收银操作可能问题占比'
+    
+    
+    print('slide17--添加消费里面的小标题')
+    slide1=prs.slides.add_slide(prs.slide_layouts[2])
+    myslide1B=slide1.placeholders[14]
+    myslide1B.text='1.会员消费强度'
+    
+    print('slide18--每月的整体营业额13')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员消费'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('13%s每月会员整体营业额.png'%bid)
+    
+    print('slide19--首次消费金额+再次消费金额14')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员消费'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('14%s消费金额的构成.png'%bid)
+    
+    print('slide20--各等级会员的消费金额15')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员消费'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('15%s各等级会员消费金额.png'%bid)
+    
+    
+    print('slide21--各等级会员桌均16')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员消费'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('161%s各等级会员桌均.png'%bid)
+    
+    
+    
+    
+    print('slide22--分店消费金额和桌均对比17')
+    # 根据门店的多少来画图
+    if len(consume_month_sid_d)>=30 and len(consume_month_sid_d)<60:
+    #     分两张插入
+        slide3=prs.slides.add_slide(prs.slide_layouts[0])
+        myslide3A=slide3.placeholders[14]
+        myslide3A.text='会员消费'
+        myslide3B=slide3.placeholders[15]
+        pic=myslide3B.insert_picture('45%s分店消费金额和桌均对比1.png'%bid)
+        
+        slide4=prs.slides.add_slide(prs.slide_layouts[0])
+        myslide4A=slide4.placeholders[14]
+        myslide4A.text='会员消费'
+        myslide4B=slide4.placeholders[15]
+        pic=myslide4B.insert_picture('46%s分店消费金额和桌均对比2.png'%bid)
+    elif len(consume_month_sid_d)>=60 and len(consume_month_sid_d)<90:
+    #     分三张插入
+        slide3=prs.slides.add_slide(prs.slide_layouts[0])
+        myslide3A=slide3.placeholders[14]
+        myslide3A.text='会员消费'
+        myslide3B=slide3.placeholders[15]
+        pic=myslide3B.insert_picture('45%s分店消费金额和桌均对比1.png'%bid)
+        
+        slide3=prs.slides.add_slide(prs.slide_layouts[0])
+        myslide3A=slide3.placeholders[14]
+        myslide3A.text='会员消费'
+        myslide3B=slide3.placeholders[15]
+        pic=myslide3B.insert_picture('46%s分店消费金额和桌均对比2.png'%bid)
+        
+        slide3=prs.slides.add_slide(prs.slide_layouts[0])
+        myslide3A=slide3.placeholders[14]
+        myslide3A.text='会员消费'
+        myslide3B=slide3.placeholders[15]
+        pic=myslide3B.insert_picture('47%s分店消费金额和桌均对比3.png'%bid)
+    elif  len(consume_month_sid_d)>=90:
+        #     分四张插入
+        slide3=prs.slides.add_slide(prs.slide_layouts[0])
+        myslide3A=slide3.placeholders[14]
+        myslide3A.text='会员消费'
+        myslide3B=slide3.placeholders[15]
+        pic=myslide3B.insert_picture('45%s分店消费金额和桌均对比1.png'%bid)
+        
+        slide3=prs.slides.add_slide(prs.slide_layouts[0])
+        myslide3A=slide3.placeholders[14]
+        myslide3A.text='会员消费'
+        myslide3B=slide3.placeholders[15]
+        pic=myslide3B.insert_picture('46%s分店消费金额和桌均对比2.png'%bid)
+        
+        slide3=prs.slides.add_slide(prs.slide_layouts[0])
+        myslide3A=slide3.placeholders[14]
+        myslide3A.text='会员消费'
+        myslide3B=slide3.placeholders[15]
+        pic=myslide3B.insert_picture('47%s分店消费金额和桌均对比3.png'%bid)
+        
+        slide3=prs.slides.add_slide(prs.slide_layouts[0])
+        myslide3A=slide3.placeholders[14]
+        myslide3A.text='会员消费'
+        myslide3B=slide3.placeholders[15]
+        pic=myslide3B.insert_picture('48%s分店消费金额和桌均对比4.png'%bid)
+    else:
+        slide3=prs.slides.add_slide(prs.slide_layouts[0])
+        myslide3A=slide3.placeholders[14]
+        myslide3A.text='会员消费'
+        myslide3B=slide3.placeholders[15]
+        pic=myslide3B.insert_picture('17%s分店消费金额和桌均对比.png'%bid)
+        
+    
+    print('slide23--添加消费里面的小标题')
+    slide1=prs.slides.add_slide(prs.slide_layouts[2])
+    myslide1B=slide1.placeholders[14]
+    myslide1B.text='2.会员消费密度'
+    
+    
+    print('slide24--各等级消费均次18')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员消费'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('18%s各等级消费均次(月).png'%bid)
+    
+    
+    print('slide25--消费转化率19')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员消费'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('%s消费转化率.png'%bid)
+    
+    
+    print('slide26--添加消费里面的小标题')
+    slide1=prs.slides.add_slide(prs.slide_layouts[2])
+    myslide1B=slide1.placeholders[14]
+    myslide1B.text='3.会员消费近度'
+    
+    print('slide27--一周内每天消费次数和桌均对比20')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员消费'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('20%s一周内每天消费次数和桌均对比.png'%bid)
+    
+    
+    
+    print('slide28--储值过会员的消费周期21')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员消费'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('21%s储值过会员消费周期.png'%bid)
+    
+    print('slide29--储值会员不同层度流失数量占比23')
+    slide3=prs.slides.add_slide(prs.slide_layouts[18])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员消费'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('23%s储值会员不同程度流失数量占比.png'%bid)
+    slide2C=slide3.placeholders[16]
+    slide2C.text='活跃会员：最近一次消费在一个周期内；瞌睡会员：最近一次消费在一到两个周期内；半睡会员：最近一次消费在两到三个周期内；流失会员：最近一次消费在三个周期外'
+    
+    print('slide30--分店储值过会员的流失数量25')
+    # 在consume里面计算时，用的是nlargest选择前20项，虽然也是前20个门店，但是这里用的是每月各门店消费来匹配，要是出现了不一致的话，
+    # 还是需要将non_charge_vip_churn_rate_sid_d_liushi导入进来，现在为了降低导出时间，没有导入
+    if len(consume_month_sid_d_charge)<20:
+        slide3=prs.slides.add_slide(prs.slide_layouts[0])
+        myslide3A=slide3.placeholders[14]
+        myslide3A.text='会员消费'
+        myslide3B=slide3.placeholders[15]
+        pic=myslide3B.insert_picture('25%s分店储值过会员的流失数量.png'%bid)
+    else:
+        slide3=prs.slides.add_slide(prs.slide_layouts[0])
+        myslide3A=slide3.placeholders[14]
+        myslide3A.text='会员消费'
+        myslide3B=slide3.placeholders[15]
+        pic=myslide3B.insert_picture('25%s分店储值过会员的流失数量_前20家门店.png'%bid)
+    
+    
+    print('slide31--非储值会员的消费周期22')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员消费'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('22%s非储值会员的消费周期.png'%bid)
+    
+    
+    
+    print('slide32--非储值会员不同层度流失数量占比24')
+    slide3=prs.slides.add_slide(prs.slide_layouts[18])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员消费'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('24%s非储值会员不同程度流失数量占比.png'%bid)
+    slide2C=slide3.placeholders[16]
+    slide2C.text='活跃会员：最近一次消费在一个周期内；瞌睡会员：最近一次消费在一到两个周期内；半睡会员：最近一次消费在两到三个周期内；沉睡会员：最近一次消费在三个周期外'
+    
+    
+    print('slide33--分店非储值会员的流失数量26')
+    if len(non_consume_month_sid_d_charge)<20:
+        slide3=prs.slides.add_slide(prs.slide_layouts[0])
+        myslide3A=slide3.placeholders[14]
+        myslide3A.text='会员消费'
+        myslide3B=slide3.placeholders[15]
+        pic=myslide3B.insert_picture('26%s分店非储值会员的流失数量.png'%bid)
+    else:
+        slide3=prs.slides.add_slide(prs.slide_layouts[0])
+        myslide3A=slide3.placeholders[14]
+        myslide3A.text='会员消费'
+        myslide3B=slide3.placeholders[15]
+        pic=myslide3B.insert_picture('26%s分店非储值会员的流失数量.png'%bid)
+    
+    
+    
+    
+    
+    print('slide34--添加消费里面的小标题')
+    slide1=prs.slides.add_slide(prs.slide_layouts[2])
+    myslide1B=slide1.placeholders[14]
+    myslide1B.text='4.收银操作可能问题占比'
+    
+    
+    print('slide35--43每月操作可能有问题占比')
+    slide3=prs.slides.add_slide(prs.slide_layouts[18])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员消费'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('43%s每月操作可能有问题占比.png'%bid)
+    slide2C=slide3.placeholders[16]
+    slide2C.text='备注：当会员消费金额低于整体桌均五分之一，则认为本笔操作可能存在问题'
+    
+    
+    print('slide36--44操作可能有问题占比较高门店')
+    slide3=prs.slides.add_slide(prs.slide_layouts[18])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员消费'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('44%s操作可能有问题占比较高门店.png'%bid)
+    slide2C=slide3.placeholders[16]
+    slide2C.text='备注：当会员消费金额低于整体桌均五分之一，则认为本笔操作可能存在问题'
+    
+    
+    
+    
+    
+    # ------------------------------------------------储值部分------------------------------------------------------------------
+    
+    print('slide37--添加第二个目录部分')
+    slide1=prs.slides.add_slide(prs.slide_layouts[1])
+    myslide1A=slide1.placeholders[11]
+    myslide1B=slide1.placeholders[10]
+    myslide1A.text='04'
+    myslide1B.text='会员储值情况分析'
+    
+    print('slide37.1--添加第三个小目录部分')
+    slide2=prs.slides.add_slide(prs.slide_layouts[21])
+    myslide14Aa=slide2.placeholders[15]
+    myslide15Ba=slide2.placeholders[16]
+    myslide14Aa.text='1.储值分析'
+    myslide15Ba.text='2.储值档分析'
+    
+    slide1=prs.slides.add_slide(prs.slide_layouts[2])
+    myslide1B=slide1.placeholders[14]
+    myslide1B.text='1.储值分析'
+    
+    print('slide38--每月的储值实收和消耗5')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员储值'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('1%s每月的储值实收和消耗.png'%bid)
+    
+    print('slide39--每月的首次和再次储值金额8')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员储值'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('4%s每月储值金额的构成.png'%bid)
+    
+    print('slide40--储值次数的转化率9')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员储值'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('9%s储值次数的转化率.png'%bid)
+    
+    
+    print('slide41--储值续充时间间隔')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员储值'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('40%s首次储值与再次储值间隔时间人数分布.png'%bid)
+    
+    
+    
+    
+    
+    print('slide42--每月的储值沉淀6')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员储值'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('6%s每月的储值沉淀.png'%bid)
+    
+    print('slide43--门店所有的储值金额7')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员储值'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('7%s门店所有的储值金额.png'%bid)
+    
+    
+    slide1=prs.slides.add_slide(prs.slide_layouts[2])
+    myslide1B=slide1.placeholders[14]
+    myslide1B.text='2.储值档分析'
+    
+    print('slide44--储值档的人数和金额分布10')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员储值'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('10%s储值档的人数和金额分布.png'%bid)
+    
+    
+    print('slide45--会员消费能力')
+    # 补充在此：
+    # 当初写的时候有点瑕疵，插入图片的时候，图片的名称被写死了，这样在ppt里面插入的永远是同一张图片,后来消费能力图片的插入依据charge里面
+    # 生成多少张就插入多少张
+    vip_consume_grid='''select grid as ccid,count(uid) as num
+    from dprpt_welife_trade_consume_detail
+    where ftime>%s and ftime<%s and bid=%i and tctype=2
+    group by grid
+    order by num desc 
+    limit 3''' %(p.ftime_s,p.ftime_e,bid)
+    vip_consume_grid=dwsql(vip_consume_grid)
+    
+    ccname='''select ccid,ccname from welife_card_categories where bid=%i ''' %bid
+    ccname_d=wesql(ccname)
+    
+    
+    huiyuan_new_create_grid_d=pd.merge(vip_consume_grid,ccname_d,on='ccid')
+    # print(huiyuan_new_create_grid_d)
+    ccid=dict(huiyuan_new_create_grid_d[['ccid','ccname']].values)
+    
+    for ci, cn in ccid.items():
+        slide3=prs.slides.add_slide(prs.slide_layouts[0])
+        myslide3A=slide3.placeholders[14]
+        myslide3A.text='会员储值'
+        myslide3B=slide3.placeholders[15]
+        pic=myslide3B.insert_picture('12_消费能力%i.png' %(ci))
+    
+    print('slide46--会员储值支付方式')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员储值'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('11%s储值支付方式占比.png'%bid)
+    
+    
+    
+    # ------------------------------------------------营销部分------------------------------------------------------------------
+    
+    
+    print('slide47--添加第四个目录部分')
+    slide1=prs.slides.add_slide(prs.slide_layouts[1])
+    myslide1A=slide1.placeholders[11]
+    myslide1B=slide1.placeholders[10]
+    myslide1A.text='05'
+    myslide1B.text='会员营销情况分析'
+    
+    
+    print('slide48--营销收入占总会员收入的比27')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员营销'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('27%s营销收入占总会员收入的比.png'%bid)
+    
+    
+    print('slide49--收益最高的5张券带动营业额占比28')
+    slide2=prs.slides.add_slide(prs.slide_layouts[7])
+    slide2A=slide2.placeholders[14]
+    slide2A.text='会员营销'
+    myslide2B=slide2.placeholders[15]
+    pic=myslide2B.insert_picture('28%s收益最高3张券带动营业额占比.png'%bid)
+    myslide2C=slide2.placeholders[16]
+    pic=myslide2C.insert_picture('42%s除开卡礼外收益较高券带动营业额占比.png'%bid)
+    
+    
+    
+    
+    print('slide50--发券量前10的券的使用率29')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员营销'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('29%s发券量靠前的券使用率.png'%bid)
+    
+    
+    
+    print('slide51--添加营销里面的小标题')
+    slide1=prs.slides.add_slide(prs.slide_layouts[2])
+    myslide1B=slide1.placeholders[14]
+    myslide1B.text='积分营销'
+    
+    print('slide52--积分使用人数和数量30')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员营销'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('31%s积分使用人数和数量.png'%bid)
+    
+    
+    print('slide53--积分余额的分布31')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员营销'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('31%s积分余额的分布.png'%bid)
+    
+    print('slide54--是否使用积分的擦差异1')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员营销'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('35%s是否使用积分的差异.png'%bid)
+    
+    
+    
+    print('slide55--添加第五个目录部分')
+    slide1=prs.slides.add_slide(prs.slide_layouts[1])
+    myslide1A=slide1.placeholders[11]
+    myslide1B=slide1.placeholders[10]
+    myslide1A.text='06'
+    myslide1B.text='会员群体质量分析'
+    
+    print('slide56--各等级的性别占比32')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员画像'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('32%s各等级的性别占比.png'%bid)
+    
+    
+    
+    print('slide57--各等级年龄分布33')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员画像'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('33%s各等级年龄分布.png'%bid)
+    
+    
+    print('slide58--各年龄段消费金额34')
+    slide3=prs.slides.add_slide(prs.slide_layouts[0])
+    myslide3A=slide3.placeholders[14]
+    myslide3A.text='会员画像'
+    myslide3B=slide3.placeholders[15]
+    pic=myslide3B.insert_picture('34%s各年龄段消费金额.png'%bid)
+    
+    
+    
+    # ------------------------------------------------插入尾页------------------------------------------------------------------
+    print('slide59--插入尾页')
+    slide3=prs.slides.add_slide(prs.slide_layouts[17])
+    
+    prs.save('%s分析报告.pptx' %bsname)
+    
+    print('60--开始删除图片')
+    path=os.getcwd()
+    os.mkdir('picture')
+    for root, dirs, files in os.walk(path):  
+         if root.endswith('pandas_pptx') :         
+            for i in files:
+                if i.endswith('png'):
+                    shutil.move(i,'picture')
+    shutil.rmtree('picture')
+    
+    
+
+    
+    # 压缩文件
+    files=['%s分析报告.pptx'%bsname,'%s会员画像.xlsx'%bsname,'%s门店会员新增.xlsx'%bsname,'%s消费数据.xlsx'%bsname,'各分店的营业额与桌均.xlsx']
+    zip_files(files, '%s分析报告和基础数据%s-%s.zip'%(bsname,p.ftime_s,p.ftime_e))
+    
+    
+    # 发送邮件
+#     user=['zhaopushuang.bj@acewill.cn','hxj@acewill.cn']
+    user=['wangzhenchun.bj@acewill.cn','zengpingying.bj@acewill.cn','zhanghaibo.bj@acewill.cn',
+          'tangtingting.bj@acewill.cn','lijuan.bj@acewill.cn','hxj@acewill.cn','wangdingling.bj@acewill.cn']
+    sendmails(user, '%s分析报告和基础数据%s-%s.zip'%(bsname,p.ftime_s,p.ftime_e), '%s分析报告和基础数据,请查收,bid为%s'%(bsname,bid), '微生活数据中心')
+    
+    
+close()
+    
+    
+    
